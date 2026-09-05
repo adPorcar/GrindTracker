@@ -130,16 +130,26 @@ Si deseas conectar la aplicación a tu propia nube de Google Drive y Google Shee
 
 ---
 
-### Paso 4: Conectar la App en `src/config.js`
-Abre el archivo `src/config.js` y pega tus valores reales:
+### Paso 4: Configurar Variables de Entorno (`.env` y Vercel)
 
-```javascript
-export const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_TU_ID_REAL/exec";
-export const AUTH_SHEET_ID = "1XyZ987654321_AbCdEfGhIjKlMnOpQr";
-export const DRIVE_FOLDER_ID = "1aBcDeFgHiJkLmNoPqRsTuVwXyZ123456";
+En Vite, las variables accesibles desde el frontend deben llevar el prefijo `VITE_`.
+
+#### Para Desarrollo Local:
+Crea o edita el archivo `.env` en la raíz del proyecto (este archivo está en `.gitignore` para no exponer tus IDs en GitHub):
+
+```env
+VITE_SCRIPT_URL=https://script.google.com/macros/s/TU_SCRIPT_ID/exec
+VITE_AUTH_SHEET_ID=TU_AUTH_SHEET_ID
+VITE_DRIVE_FOLDER_ID=TU_DRIVE_FOLDER_ID
 ```
 
-¡Guarda el archivo y tu aplicación ya estará 100% conectada a Google Sheets en tiempo real!
+#### Para Despliegue en Vercel:
+1. Sube tu proyecto a GitHub e impórtalo en [Vercel](https://vercel.com).
+2. Durante la creación del proyecto (o en **Settings > Environment Variables**), añade estas 3 variables:
+   - **`VITE_SCRIPT_URL`**: URL de tu Web App de Apps Script (`https://script.google.com/macros/s/.../exec`).
+   - **`VITE_AUTH_SHEET_ID`**: ID de tu Google Sheet de autenticación.
+   - **`VITE_DRIVE_FOLDER_ID`**: ID de la carpeta de Drive.
+3. Haz el despliegue (*Deploy*). ¡Vercel inyectará estas variables automáticamente durante la compilación!
 
 ---
 
