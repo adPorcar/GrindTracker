@@ -74,6 +74,7 @@ async function callAppsScript(payload) {
     // Note: text/plain avoids CORS preflight OPTIONS in Apps Script Web Apps
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',
+      redirect: 'follow',
       headers: {
         'Content-Type': 'text/plain;charset=utf-8',
       },
@@ -88,6 +89,9 @@ async function callAppsScript(payload) {
     return data;
   } catch (err) {
     console.error('[MoliendaCafé] Error llamando a Apps Script:', err);
+    if (err.message && err.message.includes('Failed to fetch')) {
+      throw new Error('Error de CORS / Acceso: Verifica que en Google Apps Script la Web App esté desplegada con "Quién tiene acceso: Cualquier persona" (Anyone) y "Ejecutar como: Yo".');
+    }
     throw err;
   }
 }
