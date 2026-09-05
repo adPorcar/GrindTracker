@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#392013" />
+      <stop offset="50%" stop-color="#23140C" />
+      <stop offset="100%" stop-color="#140A06" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EAA088" />
+      <stop offset="50%" stop-color="#C86242" />
+      <stop offset="100%" stop-color="#8E5B3D" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  
+  <!-- Rounded Squircle Base for iOS app icon aesthetic -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)" />
+  
+  <!-- Subtle inner border -->
+  <rect x="16" y="16" width="480" height="480" rx="100" fill="none" stroke="#C86242" stroke-opacity="0.25" stroke-width="3" />
+
+  <!-- Coffee Grinder / Bean Graphic -->
+  <g filter="url(#shadow)" transform="translate(106, 106) scale(0.58)">
+    <!-- Steam / Aroma lines -->
+    <path d="M 220 30 Q 240 70 220 110" fill="none" stroke="#D5BEB0" stroke-width="14" stroke-linecap="round" stroke-opacity="0.7"/>
+    <path d="M 260 10 Q 280 60 260 110" fill="none" stroke="#D5BEB0" stroke-width="14" stroke-linecap="round" stroke-opacity="0.9"/>
+    <path d="M 300 30 Q 320 70 300 110" fill="none" stroke="#D5BEB0" stroke-width="14" stroke-linecap="round" stroke-opacity="0.7"/>
+
+    <!-- Coffee Hopper / Grinder Top Handle -->
+    <path d="M 260 110 L 260 170" stroke="url(#goldGrad)" stroke-width="20" stroke-linecap="round"/>
+    <ellipse cx="260" cy="115" rx="55" ry="16" fill="none" stroke="url(#goldGrad)" stroke-width="14"/>
+    <circle cx="315" cy="115" r="18" fill="url(#goldGrad)"/>
+
+    <!-- Main Grinder Funnel / Body -->
+    <path d="M 120 180 L 400 180 L 350 310 L 170 310 Z" fill="#2E1B10" stroke="url(#goldGrad)" stroke-width="14" stroke-linejoin="round"/>
+    <line x1="160" y1="245" x2="360" y2="245" stroke="#C86242" stroke-width="6" stroke-opacity="0.5"/>
+
+    <!-- Coffee Burr / Adjustment dial ring -->
+    <rect x="200" y="310" width="120" height="36" rx="10" fill="url(#goldGrad)"/>
+    <line x1="220" y1="320" x2="220" y2="336" stroke="#23140C" stroke-width="4"/>
+    <line x1="240" y1="320" x2="240" y2="336" stroke="#23140C" stroke-width="4"/>
+    <line x1="260" y1="320" x2="260" y2="336" stroke="#23140C" stroke-width="4"/>
+    <line x1="280" y1="320" x2="280" y2="336" stroke="#23140C" stroke-width="4"/>
+    <line x1="300" y1="320" x2="300" y2="336" stroke="#23140C" stroke-width="4"/>
+
+    <!-- Catch Cup / Glass Chamber -->
+    <path d="M 160 350 L 360 350 L 340 470 C 340 490 320 500 260 500 C 200 500 180 490 180 470 Z" fill="#1B100B" stroke="url(#goldGrad)" stroke-width="14"/>
+
+    <!-- Coffee Grounds Level in Chamber -->
+    <path d="M 185 430 Q 260 410 335 430 L 330 465 C 330 480 315 488 260 488 C 205 488 190 480 190 465 Z" fill="#C86242" opacity="0.85"/>
+  </g>
+</svg>
