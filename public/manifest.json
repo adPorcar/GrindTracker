@@ -1,7 +1,7 @@
 {
-  "name": "MoliendaCafé",
-  "short_name": "Molienda",
-  "description": "Registro minimalista de moliendas de café de especialidad",
+  "name": "Grind Tracker",
+  "short_name": "GrindTracker",
+  "description": "El cuaderno digital de moliendas para apasionados del café",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FDFBF7",

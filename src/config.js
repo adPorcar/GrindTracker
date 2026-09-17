@@ -1,5 +1,5 @@
 /**
- * Configuración global de la aplicación MoliendaCafé
+ * Configuración global de la aplicación Grind Tracker
  * 
  * Los valores se leen desde variables de entorno con prefijo VITE_
  * para ser accesibles en el frontend tanto en local (.env) como en Vercel.

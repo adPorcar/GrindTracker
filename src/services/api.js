@@ -1,59 +1,56 @@
 import { SCRIPT_URL, AUTH_SHEET_ID, DRIVE_FOLDER_ID, isConfigured } from '../config';
 
-// Key for local demo storage when SCRIPT_URL is not yet configured
-const LOCAL_STORAGE_KEY_USERS = 'molienda_demo_users';
-const LOCAL_STORAGE_KEY_GRINDS = 'molienda_demo_grinds_';
+// Storage keys for local demo simulation
+const LOCAL_STORAGE_KEY_USERS = 'grind_demo_users';
+const LOCAL_STORAGE_KEY_GRINDS = 'grind_demo_grinds_';
+const LOCAL_STORAGE_KEY_MILLS = 'grind_demo_mills_';
 
 /**
- * Helper to get local demo users
+ * Client-side input sanitizer to prevent formula injection and dangerous characters
+ */
+export const sanitize = (val) => {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'number' || typeof val === 'boolean') return val;
+  let str = String(val).trim();
+  // If string starts with formula trigger in spreadsheet, escape with single quote
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return str;
+};
+
+/**
+ * Local demo users
  */
 const getDemoUsers = () => {
   const users = localStorage.getItem(LOCAL_STORAGE_KEY_USERS);
-  return users ? JSON.parse(users) : [
-    { username: 'barista', password: '123', user_sheet_id: 'demo_sheet_barista' }
-  ];
+  return users ? JSON.parse(users) : [];
 };
 
 const saveDemoUsers = (users) => {
   localStorage.setItem(LOCAL_STORAGE_KEY_USERS, JSON.stringify(users));
 };
 
+/**
+ * Local demo mills / grinders
+ */
+const getDemoMills = (userSheetId) => {
+  const saved = localStorage.getItem(LOCAL_STORAGE_KEY_MILLS + userSheetId);
+  if (saved) return JSON.parse(saved);
+  return [];
+};
+
+const saveDemoMills = (userSheetId, mills) => {
+  localStorage.setItem(LOCAL_STORAGE_KEY_MILLS + userSheetId, JSON.stringify(mills));
+};
+
+/**
+ * Local demo grinds
+ */
 const getDemoGrinds = (userSheetId) => {
   const grinds = localStorage.getItem(LOCAL_STORAGE_KEY_GRINDS + userSheetId);
   if (grinds) return JSON.parse(grinds);
-  
-  // Initial demo data
-  const initial = [
-    {
-      id: 'demo-1',
-      molino: 'Comandante C40',
-      metodo: 'V60 / Filtro',
-      pais: 'Etiopía Yirgacheffe',
-      grado: 22.0,
-      comentario: 'Tueste medio-claro. Notas a jazmín y bergamota, acidez brillante.',
-      fecha: new Date().toLocaleDateString('es-ES')
-    },
-    {
-      id: 'demo-2',
-      molino: 'Eureka Mignon Specialita',
-      metodo: 'Espresso',
-      pais: 'Colombia Huila',
-      grado: 2.8,
-      comentario: 'Extracción 18g en / 36g out en 28 segundos. Crema avellanada y cuerpo denso.',
-      fecha: new Date(Date.now() - 86400000).toLocaleDateString('es-ES')
-    },
-    {
-      id: 'demo-3',
-      molino: '1Zpresso JX-Pro',
-      metodo: 'Aeropress',
-      pais: 'Kenia Nyeri',
-      grado: 15.5,
-      comentario: 'Método invertido, 2:00 min infusión. Notas a grosella negra y ciruela.',
-      fecha: new Date(Date.now() - 172800000).toLocaleDateString('es-ES')
-    }
-  ];
-  localStorage.setItem(LOCAL_STORAGE_KEY_GRINDS + userSheetId, JSON.stringify(initial));
-  return initial;
+  return [];
 };
 
 const saveDemoGrinds = (userSheetId, grinds) => {
@@ -64,14 +61,11 @@ const saveDemoGrinds = (userSheetId, grinds) => {
  * Execute request to Google Apps Script Web App
  */
 async function callAppsScript(payload) {
-  // If not configured, use local simulated backend
   if (!isConfigured()) {
-    console.warn('[MoliendaCafé] SCRIPT_URL o IDs no configurados. Operando en Modo Demo Local.');
     return handleLocalDemo(payload);
   }
 
   try {
-    // Note: text/plain avoids CORS preflight OPTIONS in Apps Script Web Apps
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',
       redirect: 'follow',
@@ -82,22 +76,22 @@ async function callAppsScript(payload) {
     });
 
     if (!response.ok) {
-      throw new Error(`Error en el servidor de Google Apps Script: ${response.status} ${response.statusText}`);
+      throw new Error(`Error en Google Apps Script: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
     return data;
   } catch (err) {
-    console.error('[MoliendaCafé] Error llamando a Apps Script:', err);
+    console.error('[Grind Tracker] Error llamando a Apps Script:', err);
     if (err.message && err.message.includes('Failed to fetch')) {
-      throw new Error('Error de CORS / Acceso: Verifica que en Google Apps Script la Web App esté desplegada con "Quién tiene acceso: Cualquier persona" (Anyone) y "Ejecutar como: Yo".');
+      throw new Error('Error de CORS / Conexión: Verifica que la Web App en Google Apps Script esté desplegada con "Acceso: Cualquier persona" y ejecutándose como tu usuario.');
     }
     throw err;
   }
 }
 
 /**
- * Fallback local demo store
+ * Fallback local demo simulator
  */
 function handleLocalDemo(payload) {
   return new Promise((resolve) => {
@@ -106,27 +100,83 @@ function handleLocalDemo(payload) {
       const users = getDemoUsers();
 
       if (action === 'login') {
-        const found = users.find(u => u.username.toLowerCase() === payload.username.toLowerCase() && u.password === payload.password);
+        const found = users.find(
+          u => u.username.toLowerCase() === (payload.username || '').toLowerCase() && u.password === payload.password
+        );
         if (found) {
-          resolve({ success: true, user: { username: found.username, user_sheet_id: found.user_sheet_id }, isDemo: true });
+          const sessionToken = 'demo_token_' + Date.now();
+          found.session_token = sessionToken;
+          saveDemoUsers(users);
+          resolve({
+            success: true,
+            user: {
+              username: found.username,
+              user_sheet_id: found.user_sheet_id,
+              session_token: sessionToken
+            },
+            isDemo: true
+          });
         } else {
           resolve({ success: false, message: 'Usuario o contraseña incorrectos (Demo: prueba barista / 123)' });
         }
       } 
       else if (action === 'register') {
-        const exists = users.find(u => u.username.toLowerCase() === payload.username.toLowerCase());
+        const exists = users.find(u => u.username.toLowerCase() === (payload.username || '').toLowerCase());
         if (exists) {
           resolve({ success: false, message: 'El nombre de usuario ya está registrado en el sistema.' });
         } else {
+          const sessionToken = 'demo_token_' + Date.now();
           const newUser = {
             username: payload.username,
             password: payload.password,
-            user_sheet_id: `sheet_${payload.username.toLowerCase()}_${Date.now()}`
+            user_sheet_id: `sheet_${payload.username.toLowerCase()}_${Date.now()}`,
+            session_token: sessionToken
           };
           users.push(newUser);
           saveDemoUsers(users);
-          resolve({ success: true, user: { username: newUser.username, user_sheet_id: newUser.user_sheet_id }, isDemo: true });
+
+          resolve({
+            success: true,
+            user: {
+              username: newUser.username,
+              user_sheet_id: newUser.user_sheet_id,
+              session_token: sessionToken
+            },
+            isDemo: true
+          });
         }
+      }
+      else if (action === 'getGrinders') {
+        const mills = getDemoMills(payload.userSheetId);
+        resolve({ success: true, grinders: mills, isDemo: true });
+      }
+      else if (action === 'addGrinder') {
+        const mills = getDemoMills(payload.userSheetId);
+        const newMill = {
+          id: 'demo_mill_' + Date.now(),
+          ...payload.grinder,
+          fecha_creacion: payload.grinder.fecha_creacion || new Date().toLocaleDateString('es-ES')
+        };
+        mills.push(newMill);
+        saveDemoMills(payload.userSheetId, mills);
+        resolve({ success: true, grinder: newMill, isDemo: true });
+      }
+      else if (action === 'updateGrinder') {
+        const mills = getDemoMills(payload.userSheetId);
+        const idx = mills.findIndex(m => String(m.id) === String(payload.grinder.id));
+        if (idx !== -1) {
+          mills[idx] = { ...mills[idx], ...payload.grinder };
+          saveDemoMills(payload.userSheetId, mills);
+          resolve({ success: true, grinder: mills[idx], isDemo: true });
+        } else {
+          resolve({ success: false, message: 'Molino no encontrado para actualizar.' });
+        }
+      }
+      else if (action === 'deleteGrinder') {
+        const mills = getDemoMills(payload.userSheetId);
+        const filtered = mills.filter(m => String(m.id) !== String(payload.id));
+        saveDemoMills(payload.userSheetId, filtered);
+        resolve({ success: true, isDemo: true });
       }
       else if (action === 'getGrinds') {
         const grinds = getDemoGrinds(payload.userSheetId);
@@ -135,7 +185,7 @@ function handleLocalDemo(payload) {
       else if (action === 'addGrind') {
         const grinds = getDemoGrinds(payload.userSheetId);
         const newGrind = {
-          id: 'grind_' + Date.now(),
+          id: 'demo_grind_' + Date.now(),
           ...payload.grind,
           fecha: payload.grind.fecha || new Date().toLocaleDateString('es-ES')
         };
@@ -151,7 +201,7 @@ function handleLocalDemo(payload) {
           saveDemoGrinds(payload.userSheetId, grinds);
           resolve({ success: true, grind: grinds[idx], isDemo: true });
         } else {
-          resolve({ success: false, message: 'Molienda no encontrada para actualizar' });
+          resolve({ success: false, message: 'Molienda no encontrada para actualizar.' });
         }
       }
       else if (action === 'deleteGrind') {
@@ -161,20 +211,20 @@ function handleLocalDemo(payload) {
         resolve({ success: true, isDemo: true });
       }
       else if (action === 'updateUser') {
-        const idx = users.findIndex(u => u.username.toLowerCase() === payload.currentUsername.toLowerCase());
+        const idx = users.findIndex(u => u.username.toLowerCase() === (payload.username || '').toLowerCase());
         if (idx !== -1) {
           if (payload.newUsername) users[idx].username = payload.newUsername;
           if (payload.newPassword) users[idx].password = payload.newPassword;
           saveDemoUsers(users);
           resolve({ success: true, user: { username: users[idx].username }, isDemo: true });
         } else {
-          resolve({ success: false, message: 'Usuario no encontrado' });
+          resolve({ success: false, message: 'Usuario no encontrado en modo demo.' });
         }
       }
       else {
         resolve({ success: false, message: `Acción '${action}' no reconocida en demo.` });
       }
-    }, 250);
+    }, 200);
   });
 }
 
@@ -203,47 +253,101 @@ export const api = {
     });
   },
 
-  // Get user's grinds
-  async getGrinds(userSheetId) {
+  // --- Grinders / Molinos ---
+  async getGrinders(userSheetId, username, sessionToken) {
     return callAppsScript({
-      action: 'getGrinds',
-      userSheetId
+      action: 'getGrinders',
+      authSheetId: AUTH_SHEET_ID,
+      userSheetId,
+      username,
+      sessionToken
     });
   },
 
-  // Add grind
-  async addGrind(userSheetId, grindData) {
+  async addGrinder(userSheetId, grinderData, username, sessionToken) {
     return callAppsScript({
-      action: 'addGrind',
+      action: 'addGrinder',
+      authSheetId: AUTH_SHEET_ID,
       userSheetId,
-      grind: grindData
+      username,
+      sessionToken,
+      grinder: grinderData
     });
   },
 
-  // Update grind
-  async updateGrind(userSheetId, grindData) {
+  async updateGrinder(userSheetId, grinderData, username, sessionToken) {
     return callAppsScript({
-      action: 'updateGrind',
+      action: 'updateGrinder',
+      authSheetId: AUTH_SHEET_ID,
       userSheetId,
-      grind: grindData
+      username,
+      sessionToken,
+      grinder: grinderData
     });
   },
 
-  // Delete grind
-  async deleteGrind(userSheetId, id) {
+  async deleteGrinder(userSheetId, id, username, sessionToken) {
     return callAppsScript({
-      action: 'deleteGrind',
+      action: 'deleteGrinder',
+      authSheetId: AUTH_SHEET_ID,
       userSheetId,
+      username,
+      sessionToken,
       id
     });
   },
 
-  // Update user profile
-  async updateUser(currentUsername, newUsername, newPassword) {
+  // --- Grinds / Moliendas ---
+  async getGrinds(userSheetId, username, sessionToken) {
+    return callAppsScript({
+      action: 'getGrinds',
+      authSheetId: AUTH_SHEET_ID,
+      userSheetId,
+      username,
+      sessionToken
+    });
+  },
+
+  async addGrind(userSheetId, grindData, username, sessionToken) {
+    return callAppsScript({
+      action: 'addGrind',
+      authSheetId: AUTH_SHEET_ID,
+      userSheetId,
+      username,
+      sessionToken,
+      grind: grindData
+    });
+  },
+
+  async updateGrind(userSheetId, grindData, username, sessionToken) {
+    return callAppsScript({
+      action: 'updateGrind',
+      authSheetId: AUTH_SHEET_ID,
+      userSheetId,
+      username,
+      sessionToken,
+      grind: grindData
+    });
+  },
+
+  async deleteGrind(userSheetId, id, username, sessionToken) {
+    return callAppsScript({
+      action: 'deleteGrind',
+      authSheetId: AUTH_SHEET_ID,
+      userSheetId,
+      username,
+      sessionToken,
+      id
+    });
+  },
+
+  // --- User Profile ---
+  async updateUser(username, newUsername, newPassword, sessionToken) {
     return callAppsScript({
       action: 'updateUser',
       authSheetId: AUTH_SHEET_ID,
-      currentUsername,
+      username,
+      sessionToken,
       newUsername: newUsername ? newUsername.trim() : undefined,
       newPassword: newPassword ? newPassword.trim() : undefined
     });

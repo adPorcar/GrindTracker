@@ -3,7 +3,7 @@ import { api } from '../services/api';
 
 const AuthContext = createContext();
 
-const STORAGE_KEY = 'molienda_session_user';
+const STORAGE_KEY = 'grind_session_user';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -35,6 +35,7 @@ export const AuthProvider = ({ children }) => {
         setUser({
           username: res.user.username,
           user_sheet_id: res.user.user_sheet_id,
+          session_token: res.user.session_token,
           isDemo: Boolean(res.isDemo)
         });
         return { success: true };
@@ -61,6 +62,7 @@ export const AuthProvider = ({ children }) => {
         setUser({
           username: res.user.username,
           user_sheet_id: res.user.user_sheet_id,
+          session_token: res.user.session_token,
           isDemo: Boolean(res.isDemo)
         });
         return { success: true };
@@ -82,7 +84,11 @@ export const AuthProvider = ({ children }) => {
     if (!user) return { success: false, message: 'No hay usuario autenticado' };
     setLoading(true);
     try {
-      const res = await api.updateUser(user.username, newUsername, newPassword);
+      const res = await api.updateUser(user.username, newUsername, newPassword, user.session_token);
+      if (res.unauthorized) {
+        logout();
+        return { success: false, message: 'Sesión expirada. Inicia sesión de nuevo.' };
+      }
       if (res.success) {
         setUser(prev => ({
           ...prev,
@@ -108,6 +114,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         user,
+        sessionToken: user?.session_token,
         isAuthenticated: !!user,
         loading,
         authError,

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { User, KeyRound, LogOut, CheckCircle2, AlertCircle, FileSpreadsheet, ShieldCheck, Smartphone, ExternalLink } from 'lucide-react';
+import { User, KeyRound, LogOut, CheckCircle2, AlertCircle, FileSpreadsheet, ShieldCheck, Smartphone, Languages } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { SCRIPT_URL, AUTH_SHEET_ID, DRIVE_FOLDER_ID, isConfigured } from '../config';
+import { useLanguage } from '../context/LanguageContext';
+import { isConfigured } from '../config';
 
 export const ProfileScreen = () => {
-  const { user, updateProfile, logout, loading } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
 
   const [newUsername, setNewUsername] = useState(user?.username || '');
   const [newPassword, setNewPassword] = useState('');
@@ -21,17 +23,17 @@ export const ProfileScreen = () => {
     setSuccessMsg('');
 
     if (!newUsername.trim()) {
-      setErrorMsg('El nombre de usuario no puede estar vacío');
+      setErrorMsg(t('errorAllFields'));
       return;
     }
 
     if (newPassword && newPassword.length < 3) {
-      setErrorMsg('La nueva contraseña debe tener al menos 3 caracteres');
+      setErrorMsg(t('errorPasswordLength'));
       return;
     }
 
     if (newPassword && newPassword !== confirmPassword) {
-      setErrorMsg('Las contraseñas no coinciden');
+      setErrorMsg(t('errorPasswordMatch'));
       return;
     }
 
@@ -43,11 +45,11 @@ export const ProfileScreen = () => {
       );
 
       if (res.success) {
-        setSuccessMsg('¡Tus datos han sido actualizados en la hoja de Auth!');
+        setSuccessMsg(t('profileUpdatedSuccess'));
         setNewPassword('');
         setConfirmPassword('');
       } else {
-        setErrorMsg(res.message || 'No se pudieron actualizar los datos');
+        setErrorMsg(res.message || 'Error al actualizar datos');
       }
     } finally {
       setIsUpdating(false);
@@ -55,10 +57,10 @@ export const ProfileScreen = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto space-y-6 pb-6 animate-in fade-in duration-200">
+    <div className="max-w-md mx-auto space-y-5 pb-6 animate-in fade-in duration-200">
       {/* Profile Header Card */}
       <div className="bg-white dark:bg-darkbg-card rounded-4xl p-6 border border-coffee-200/80 dark:border-darkbg-border shadow-soft dark:shadow-dark-soft flex items-center gap-4">
-        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-coffee-700 to-terracotta text-white flex items-center justify-center font-black text-2xl shadow-sm flex-shrink-0">
+        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-coffee-800 to-terracotta text-white flex items-center justify-center font-black text-2xl shadow-sm flex-shrink-0">
           {user?.username ? user.username.charAt(0).toUpperCase() : 'B'}
         </div>
         <div className="flex-1 min-w-0">
@@ -66,29 +68,68 @@ export const ProfileScreen = () => {
             <h2 className="text-lg font-black text-coffee-900 dark:text-coffee-100 truncate">
               @{user?.username}
             </h2>
-            <ShieldCheck className="w-4 h-4 text-terracotta flex-shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
           </div>
           <p className="text-xs text-coffee-500 dark:text-coffee-400 truncate">
-            {configured ? 'Conectado a Google Sheets' : 'Sesión en Modo Demo'}
+            {configured ? t('connected') : t('demoMode')}
           </p>
           {user?.user_sheet_id && (
             <div className="mt-1 flex items-center gap-1 text-[11px] text-coffee-400 font-mono truncate">
               <FileSpreadsheet className="w-3 h-3 flex-shrink-0" />
-              <span className="truncate">ID: {user.user_sheet_id}</span>
+              <span className="truncate">Hoja: {user.user_sheet_id}</span>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Language Preferences Selector */}
+      <div className="bg-white dark:bg-darkbg-card rounded-4xl p-6 border border-coffee-200/80 dark:border-darkbg-border shadow-soft dark:shadow-dark-soft space-y-3">
+        <div>
+          <h3 className="text-xs font-bold text-coffee-900 dark:text-coffee-100 uppercase tracking-wider flex items-center gap-2">
+            <Languages className="w-4 h-4 text-terracotta" />
+            <span>{t('languagePreferencesTitle')}</span>
+          </h3>
+          <p className="text-xs text-coffee-500 dark:text-coffee-400 mt-0.5">
+            {t('languagePreferencesDesc')}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setLanguage('es')}
+            className={`py-3 px-4 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-2 ${
+              language === 'es'
+                ? 'bg-coffee-800 dark:bg-terracotta text-white border-coffee-800 dark:border-terracotta shadow-xs'
+                : 'bg-coffee-50/70 dark:bg-darkbg-input text-coffee-700 dark:text-coffee-300 border-coffee-200 dark:border-darkbg-border'
+            }`}
+          >
+            <span>🇪🇸 {t('spanish')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setLanguage('en')}
+            className={`py-3 px-4 rounded-2xl text-xs font-bold transition-all border flex items-center justify-center gap-2 ${
+              language === 'en'
+                ? 'bg-coffee-800 dark:bg-terracotta text-white border-coffee-800 dark:border-terracotta shadow-xs'
+                : 'bg-coffee-50/70 dark:bg-darkbg-input text-coffee-700 dark:text-coffee-300 border-coffee-200 dark:border-darkbg-border'
+            }`}
+          >
+            <span>🇬🇧 {t('english')}</span>
+          </button>
         </div>
       </div>
 
       {/* Edit Credentials Form */}
       <div className="bg-white dark:bg-darkbg-card rounded-4xl p-6 border border-coffee-200/80 dark:border-darkbg-border shadow-soft dark:shadow-dark-soft space-y-5">
         <div>
-          <h3 className="text-sm font-bold text-coffee-900 dark:text-coffee-100 uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-xs font-bold text-coffee-900 dark:text-coffee-100 uppercase tracking-wider flex items-center gap-2">
             <KeyRound className="w-4 h-4 text-terracotta" />
-            <span>Actualizar Credenciales</span>
+            <span>{t('updateCredentials')}</span>
           </h3>
-          <p className="text-xs text-coffee-500 dark:text-coffee-400 mt-1">
-            Modifica tu nombre de usuario o actualiza tu contraseña de acceso
+          <p className="text-xs text-coffee-500 dark:text-coffee-400 mt-0.5">
+            {t('updateCredentialsDesc')}
           </p>
         </div>
 
@@ -109,7 +150,7 @@ export const ProfileScreen = () => {
         <form onSubmit={handleUpdate} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1.5">
-              Nuevo Nombre de Usuario
+              {t('newUsernameLabel')}
             </label>
             <input
               type="text"
@@ -122,13 +163,13 @@ export const ProfileScreen = () => {
 
           <div>
             <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1.5">
-              Nueva Contraseña (Opcional)
+              {t('newPasswordLabel')}
             </label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Dejar en blanco para mantener actual"
+              placeholder={t('newPasswordPlaceholder')}
               className="w-full px-4 py-3 rounded-2xl bg-coffee-50/50 dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-medium focus:ring-2 focus:ring-terracotta/40 focus:outline-none"
             />
           </div>
@@ -136,13 +177,13 @@ export const ProfileScreen = () => {
           {newPassword && (
             <div>
               <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1.5">
-                Confirmar Nueva Contraseña
+                {t('confirmNewPasswordLabel')}
               </label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repite la nueva contraseña"
+                placeholder={t('newPasswordPlaceholder')}
                 className="w-full px-4 py-3 rounded-2xl bg-coffee-50/50 dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-medium focus:ring-2 focus:ring-terracotta/40 focus:outline-none"
               />
             </div>
@@ -156,30 +197,32 @@ export const ProfileScreen = () => {
             {isUpdating ? (
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
-              'Guardar Cambios de Perfil'
+              t('saveProfile')
             )}
           </button>
         </form>
       </div>
 
-      {/* Configuration Status Card */}
+      {/* Security Architecture & Session Tokens Info */}
       <div className="bg-white dark:bg-darkbg-card rounded-4xl p-6 border border-coffee-200/80 dark:border-darkbg-border shadow-soft dark:shadow-dark-soft space-y-3">
-        <h3 className="text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider flex items-center gap-2">
-          <Smartphone className="w-4 h-4 text-terracotta" />
-          <span>Configuración PWA & Backend</span>
+        <h3 className="text-xs font-bold text-coffee-900 dark:text-coffee-100 uppercase tracking-wider flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <span>{t('securityTitle')}</span>
         </h3>
 
         <div className="space-y-2 text-xs">
-          <div className="flex items-center justify-between p-2.5 rounded-xl bg-coffee-50/60 dark:bg-darkbg-input">
-            <span className="text-coffee-600 dark:text-coffee-400 font-medium">Google Apps Script</span>
-            <span className={`font-mono text-[11px] font-bold ${configured ? 'text-emerald-600' : 'text-amber-500'}`}>
-              {configured ? 'Configurado' : 'Pendiente'}
+          <div className="p-3 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-900/50 text-emerald-900 dark:text-emerald-300">
+            <span className="font-bold block mb-1">
+              ✓ {t('sessionTokenActive')}
             </span>
+            <p className="text-[11px] text-emerald-800/90 dark:text-emerald-300/90 leading-relaxed">
+              {t('sessionTokenDesc')}
+            </p>
           </div>
 
           <div className="flex items-center justify-between p-2.5 rounded-xl bg-coffee-50/60 dark:bg-darkbg-input">
             <span className="text-coffee-600 dark:text-coffee-400 font-medium">Instalación PWA iOS</span>
-            <span className="text-coffee-700 dark:text-coffee-300 font-medium">
+            <span className="text-coffee-700 dark:text-coffee-300 font-semibold text-[11px]">
               Safari: Compartir → Añadir a inicio
             </span>
           </div>
@@ -187,13 +230,13 @@ export const ProfileScreen = () => {
       </div>
 
       {/* Logout Action */}
-      <div className="pt-2">
+      <div className="pt-1">
         <button
           onClick={logout}
           className="w-full py-3.5 px-4 rounded-2xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50 text-red-600 dark:text-red-400 border border-red-200/80 dark:border-red-900/50 font-bold text-xs transition-all flex items-center justify-center gap-2 active:scale-98"
         >
           <LogOut className="w-4 h-4" />
-          <span>Cerrar Sesión</span>
+          <span>{t('logoutButton')}</span>
         </button>
       </div>
     </div>
