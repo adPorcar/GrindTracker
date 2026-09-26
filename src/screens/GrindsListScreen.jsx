@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Filter, Coffee, RefreshCw, X, AlertCircle, Scale, Thermometer } from 'lucide-react';
 import { GrindCard } from '../components/GrindCard';
 import { Modal } from '../components/Modal';
+import { EditGrindModal } from '../components/EditGrindModal';
 import { useLanguage } from '../context/LanguageContext';
 
 const COFFEE_METHODS = [
@@ -49,22 +50,6 @@ export const GrindsListScreen = ({
 
   // Editing state
   const [editingGrind, setEditingGrind] = useState(null);
-  const [editForm, setEditForm] = useState({
-    molino: '',
-    nombre_cafe: '',
-    tostadero: '',
-    metodo: 'Espresso',
-    variedad: 'Arábica',
-    proceso: 'Lavado',
-    pais: '',
-    perfil_sabor: '',
-    temp_agua: '',
-    cafe_in: '',
-    cafe_out: '',
-    grado: 0,
-    comentario: ''
-  });
-  const [isUpdating, setIsUpdating] = useState(false);
 
   // Dynamic filter lists from data
   const uniqueMills = useMemo(() => {
@@ -114,53 +99,10 @@ export const GrindsListScreen = ({
 
   const openEditModal = (grind) => {
     setEditingGrind(grind);
-    setEditForm({
-      molino: grind.molino || (mills[0]?.nombre || ''),
-      nombre_cafe: grind.nombre_cafe || '',
-      tostadero: grind.tostadero || '',
-      metodo: grind.metodo || 'Espresso',
-      variedad: grind.variedad || 'Arábica',
-      proceso: grind.proceso || 'Lavado',
-      pais: grind.pais || '',
-      perfil_sabor: grind.perfil_sabor || '',
-      temp_agua: grind.temp_agua ? String(grind.temp_agua) : '',
-      cafe_in: grind.cafe_in ? String(grind.cafe_in) : '18.0',
-      cafe_out: grind.cafe_out ? String(grind.cafe_out) : '36.0',
-      grado: parseFloat(grind.grado) || 0,
-      comentario: grind.comentario || ''
-    });
   };
 
   const closeEditModal = () => {
     setEditingGrind(null);
-  };
-
-  const handleSaveEdit = async (e) => {
-    e.preventDefault();
-    if (!editingGrind) return;
-
-    if (editForm.metodo === 'Espresso') {
-      if (!editForm.cafe_in || !editForm.cafe_out) {
-        alert('Para Espresso, los campos Café IN y Café OUT son requeridos.');
-        return;
-      }
-    }
-
-    setIsUpdating(true);
-    try {
-      await onUpdateGrind({
-        id: editingGrind.id,
-        ...editForm,
-        grado: parseFloat(editForm.grado),
-        temp_agua: editForm.temp_agua ? parseFloat(editForm.temp_agua) : null,
-        cafe_in: editForm.metodo === 'Espresso' ? parseFloat(editForm.cafe_in) : null,
-        cafe_out: editForm.metodo === 'Espresso' ? parseFloat(editForm.cafe_out) : null,
-        fecha: editingGrind.fecha
-      });
-      closeEditModal();
-    } finally {
-      setIsUpdating(false);
-    }
   };
 
   const clearFilters = () => {
@@ -418,239 +360,13 @@ export const GrindsListScreen = ({
       )}
 
       {/* Modal / Popup flotante para editar molienda */}
-      <Modal
-        isOpen={!!editingGrind}
+      <EditGrindModal
+        isOpen={Boolean(editingGrind)}
         onClose={closeEditModal}
-        title={t('editGrindTitle')}
-      >
-        <form onSubmit={handleSaveEdit} className="space-y-4">
-          {/* Molino */}
-          <div>
-            <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-              {t('selectMillLabel')}
-            </label>
-            <select
-              value={editForm.molino}
-              onChange={(e) => setEditForm({ ...editForm, molino: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-semibold focus:ring-2 focus:ring-terracotta/40"
-            >
-              {mills.map((m) => (
-                <option key={m.id} value={m.nombre}>
-                  {m.nombre}
-                </option>
-              ))}
-              {/* Fallback if mill was deleted */}
-              {!mills.some(m => m.nombre === editForm.molino) && editForm.molino && (
-                <option value={editForm.molino}>{editForm.molino}</option>
-              )}
-            </select>
-          </div>
-
-          {/* Café y Tostadero */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-                {t('coffeeNameLabel')}
-              </label>
-              <input
-                type="text"
-                value={editForm.nombre_cafe}
-                onChange={(e) => setEditForm({ ...editForm, nombre_cafe: e.target.value })}
-                required
-                className="w-full px-3 py-2 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-medium focus:ring-2 focus:ring-terracotta/40"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-                {t('roasterLabel')}
-              </label>
-              <input
-                type="text"
-                value={editForm.tostadero}
-                onChange={(e) => setEditForm({ ...editForm, tostadero: e.target.value })}
-                required
-                className="w-full px-3 py-2 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-medium focus:ring-2 focus:ring-terracotta/40"
-              />
-            </div>
-          </div>
-
-          {/* Método, Variedad, Proceso */}
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-[11px] font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-                {t('methodLabel')}
-              </label>
-              <select
-                value={editForm.metodo}
-                onChange={(e) => setEditForm({ ...editForm, metodo: e.target.value })}
-                className="w-full px-2 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40"
-              >
-                {COFFEE_METHODS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-                {t('varietyLabel')}
-              </label>
-              <select
-                value={editForm.variedad}
-                onChange={(e) => setEditForm({ ...editForm, variedad: e.target.value })}
-                className="w-full px-2 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40"
-              >
-                {COFFEE_VARIETIES.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-                {t('processLabel')}
-              </label>
-              <select
-                value={editForm.proceso}
-                onChange={(e) => setEditForm({ ...editForm, proceso: e.target.value })}
-                className="w-full px-2 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40"
-              >
-                {COFFEE_PROCESSES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Espresso conditional fields in Modal */}
-          {editForm.metodo === 'Espresso' && (
-            <div className="bg-orange-50/80 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 p-3 rounded-2xl grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[10px] font-bold text-orange-800 dark:text-orange-300 mb-1">
-                  {t('espressoCoffeeInLabel')}
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={editForm.cafe_in}
-                  onChange={(e) => setEditForm({ ...editForm, cafe_in: e.target.value })}
-                  required
-                  className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-darkbg-input border border-orange-300 font-mono text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-orange-800 dark:text-orange-300 mb-1">
-                  {t('espressoCoffeeOutLabel')}
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={editForm.cafe_out}
-                  onChange={(e) => setEditForm({ ...editForm, cafe_out: e.target.value })}
-                  required
-                  className="w-full px-2 py-1.5 rounded-lg bg-white dark:bg-darkbg-input border border-orange-300 font-mono text-xs"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* País & Temperatura */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-                {t('countryLabel')}
-              </label>
-              <input
-                type="text"
-                value={editForm.pais}
-                onChange={(e) => setEditForm({ ...editForm, pais: e.target.value })}
-                required
-                className="w-full px-3 py-2 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-medium focus:ring-2 focus:ring-terracotta/40"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-                {t('waterTempLabel')}
-              </label>
-              <input
-                type="number"
-                value={editForm.temp_agua}
-                onChange={(e) => setEditForm({ ...editForm, temp_agua: e.target.value })}
-                className="w-full px-3 py-2 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-mono font-medium focus:ring-2 focus:ring-terracotta/40"
-              />
-            </div>
-          </div>
-
-          {/* Grado */}
-          <div>
-            <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-              {t('grindSettingLabel')}
-            </label>
-            <input
-              type="number"
-              step="any"
-              value={editForm.grado}
-              onChange={(e) => setEditForm({ ...editForm, grado: e.target.value })}
-              required
-              className="w-full px-4 py-2.5 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-base font-mono font-bold focus:ring-2 focus:ring-terracotta/40"
-            />
-          </div>
-
-          {/* Perfil de Sabor */}
-          <div>
-            <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-              {t('flavorProfileLabel')}
-            </label>
-            <input
-              type="text"
-              value={editForm.perfil_sabor}
-              onChange={(e) => setEditForm({ ...editForm, perfil_sabor: e.target.value })}
-              className="w-full px-3 py-2 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm focus:ring-2 focus:ring-terracotta/40"
-            />
-          </div>
-
-          {/* Comentarios */}
-          <div>
-            <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-              {t('commentsLabel')}
-            </label>
-            <textarea
-              rows="2"
-              value={editForm.comentario}
-              onChange={(e) => setEditForm({ ...editForm, comentario: e.target.value })}
-              className="w-full px-3 py-2 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm focus:ring-2 focus:ring-terracotta/40 resize-none"
-            />
-          </div>
-
-          <div className="pt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={closeEditModal}
-              className="flex-1 py-3 px-4 rounded-2xl bg-coffee-100 hover:bg-coffee-200 dark:bg-darkbg-input text-coffee-700 dark:text-coffee-300 font-bold text-xs transition-colors"
-            >
-              {t('cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={isUpdating}
-              className="flex-1 py-3 px-4 rounded-2xl bg-terracotta hover:bg-terracotta-dark text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
-            >
-              {isUpdating ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                t('saveChanges')
-              )}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        grind={editingGrind}
+        mills={mills}
+        onSave={onUpdateGrind}
+      />
     </div>
   );
 };

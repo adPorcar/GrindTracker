@@ -16,6 +16,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { DialSlider } from '../components/DialSlider';
 
 const COFFEE_METHODS = [
   'Espresso',
@@ -107,16 +108,15 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
       return { min: 0, max: 40, step: 0.5, unit: t('grindSettingUnitClicks'), isDial: false, stepsPerNum: 0, totalNumbers: 0 };
     }
 
-    if (activeMill.tipo === 'dial') {
-      const maxNum = Number(activeMill.total_numeros) || 10;
-      const stepsPerNum = Number(activeMill.pasos_por_numero) || 4;
-      // Total internal positions: number 1 step 1 through number maxNum step stepsPerNum
-      const totalPositions = maxNum * stepsPerNum;
+    const isDial = String(activeMill.type || activeMill.tipo || '').toLowerCase() === 'dial';
+    if (isDial) {
+      const maxNum = Number(activeMill.total_dial_numbers || activeMill.total_numeros) || 11;
+      const stepsPerNum = Number(activeMill.dial_steps || activeMill.pasos_por_numero) || 4;
       return {
-        min: 0,             // internal index min (maps to 1.1)
-        max: totalPositions - 1, // internal index max (maps to maxNum.stepsPerNum)
-        step: 1,            // each click = 1 internal step
-        unit: t('grindSettingUnitDial'),
+        min: 0,
+        max: maxNum,
+        step: 1 / stepsPerNum,
+        unit: t('grindSettingUnitDial') || 'Dial',
         isDial: true,
         stepsPerNum,
         totalNumbers: maxNum
@@ -127,7 +127,7 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
         min: 0,
         max: maxClicks,
         step: 0.5,
-        unit: t('grindSettingUnitClicks'),
+        unit: t('grindSettingUnitClicks') || 'Clicks',
         isDial: false,
         stepsPerNum: 0,
         totalNumbers: 0
@@ -227,10 +227,7 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
 
     setSubmitting(true);
     try {
-      // For dial grinders, save the display notation (e.g. "3.2") as the grado
-      const gradoToSave = sliderConfig.isDial
-        ? formatDialValue(dialStep, sliderConfig.stepsPerNum)
-        : parseFloat(grado);
+      const gradoToSave = parseFloat(grado) || 0;
 
       await onSave({
         molino: activeMill.nombre,
@@ -339,90 +336,67 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
         </div>
 
         {/* 2. Barra Progresiva / Range Slider Adaptativo del Grado de Molienda */}
-        <div className="bg-coffee-50/70 dark:bg-darkbg-input/60 p-4 rounded-3xl border border-coffee-200/60 dark:border-darkbg-border/60 space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-coffee-800 dark:text-coffee-200 uppercase tracking-wider flex items-center gap-1.5">
-              <Hash className="w-3.5 h-3.5 text-terracotta" />
-              <span>{t('grindSettingLabel')}</span>
-            </label>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-xl bg-terracotta/15 text-terracotta dark:bg-terracotta/20 dark:text-terracotta-light font-mono">
-              {sliderConfig.isDial
-                ? formatDialValue(dialStep, sliderConfig.stepsPerNum)
-                : Number(grado).toFixed(1)
-              } {sliderConfig.unit}
-            </span>
-          </div>
+        <div>
+          {sliderConfig.isDial ? (
+            <DialSlider
+              value={grado}
+              onChange={setGrado}
+              totalNumbers={sliderConfig.totalNumbers}
+              dialSteps={sliderConfig.stepsPerNum}
+              min={0}
+              unit={sliderConfig.unit}
+            />
+          ) : (
+            <div className="bg-coffee-50/70 dark:bg-darkbg-input/60 p-4 rounded-3xl border border-coffee-200/60 dark:border-darkbg-border/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-coffee-800 dark:text-coffee-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <Hash className="w-3.5 h-3.5 text-terracotta" />
+                  <span>{t('grindSettingLabel')}</span>
+                </label>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-xl bg-terracotta/15 text-terracotta dark:bg-terracotta/20 dark:text-terracotta-light font-mono">
+                  {Number(grado).toFixed(1)} {sliderConfig.unit}
+                </span>
+              </div>
 
-          {/* Stepper + Input display */}
-          <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={() => handleStepper(-1)}
-              className="w-11 h-11 rounded-2xl bg-white dark:bg-darkbg-card hover:bg-coffee-100 dark:hover:bg-darkbg-cardHover text-coffee-800 dark:text-coffee-200 flex items-center justify-center font-bold text-lg transition-transform active:scale-90 border border-coffee-200/80 dark:border-darkbg-border shadow-xs"
-              aria-label="Restar paso"
-            >
-              <Minus className="w-4 h-4" />
-            </button>
-
-            <div className="flex-1 relative">
-              {sliderConfig.isDial ? (
-                /* Dial: show formatted x.y value as read-only styled display */
-                <div
-                  className="w-full text-center py-2.5 rounded-2xl bg-white dark:bg-darkbg-card border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xl font-mono font-black shadow-xs select-none"
+              {/* Stepper + Input display */}
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleStepper(-1)}
+                  className="w-11 h-11 rounded-2xl bg-white dark:bg-darkbg-card hover:bg-coffee-100 dark:hover:bg-darkbg-cardHover text-coffee-800 dark:text-coffee-200 flex items-center justify-center font-bold text-lg transition-transform active:scale-90 border border-coffee-200/80 dark:border-darkbg-border shadow-xs"
+                  aria-label="Restar paso"
                 >
-                  {formatDialValue(dialStep, sliderConfig.stepsPerNum)}
-                </div>
-              ) : (
-                /* Clicks: standard numeric input */
-                <input
-                  type="number"
-                  step={sliderConfig.step}
-                  min={sliderConfig.min}
-                  max={sliderConfig.max}
-                  value={grado}
-                  onChange={(e) => setGrado(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  required
-                  className="w-full text-center py-2.5 rounded-2xl bg-white dark:bg-darkbg-card border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xl font-mono font-black focus:outline-none focus:ring-2 focus:ring-terracotta/40 transition-all shadow-xs"
-                />
-              )}
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase font-bold text-coffee-400">
-                {sliderConfig.unit}
-              </span>
-            </div>
+                  <Minus className="w-4 h-4" />
+                </button>
 
-            <button
-              type="button"
-              onClick={() => handleStepper(1)}
-              className="w-11 h-11 rounded-2xl bg-white dark:bg-darkbg-card hover:bg-coffee-100 dark:hover:bg-darkbg-cardHover text-coffee-800 dark:text-coffee-200 flex items-center justify-center font-bold text-lg transition-transform active:scale-90 border border-coffee-200/80 dark:border-darkbg-border shadow-xs"
-              aria-label="Sumar paso"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Progressive Range Slider */}
-          <div className="pt-1">
-            {sliderConfig.isDial ? (
-              /* Dial: slider over internal integer steps */
-              <>
-                <input
-                  type="range"
-                  min={sliderConfig.min}
-                  max={sliderConfig.max}
-                  step={1}
-                  value={dialStep}
-                  onChange={(e) => setDialStep(parseInt(e.target.value))}
-                  className="w-full h-2.5 bg-coffee-200 dark:bg-darkbg-border rounded-lg appearance-none cursor-pointer accent-terracotta"
-                />
-                <div className="flex justify-between items-center text-[10px] text-coffee-400 font-mono mt-1 px-1">
-                  <span>{formatDialValue(0, sliderConfig.stepsPerNum)}</span>
-                  <span>{t('grindMedium')}</span>
-                  <span>{formatDialValue(sliderConfig.max, sliderConfig.stepsPerNum)}</span>
+                <div className="flex-1 relative">
+                  <input
+                    type="number"
+                    step={sliderConfig.step}
+                    min={sliderConfig.min}
+                    max={sliderConfig.max}
+                    value={grado}
+                    onChange={(e) => setGrado(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    required
+                    className="w-full text-center py-2.5 rounded-2xl bg-white dark:bg-darkbg-card border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xl font-mono font-black focus:outline-none focus:ring-2 focus:ring-terracotta/40 transition-all shadow-xs"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase font-bold text-coffee-400">
+                    {sliderConfig.unit}
+                  </span>
                 </div>
-              </>
-            ) : (
-              /* Clicks: standard float slider */
-              <>
+
+                <button
+                  type="button"
+                  onClick={() => handleStepper(1)}
+                  className="w-11 h-11 rounded-2xl bg-white dark:bg-darkbg-card hover:bg-coffee-100 dark:hover:bg-darkbg-cardHover text-coffee-800 dark:text-coffee-200 flex items-center justify-center font-bold text-lg transition-transform active:scale-90 border border-coffee-200/80 dark:border-darkbg-border shadow-xs"
+                  aria-label="Sumar paso"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Progressive Range Slider */}
+              <div className="pt-1">
                 <input
                   type="range"
                   min={sliderConfig.min}
@@ -437,9 +411,9 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
                   <span>{t('grindMedium')}</span>
                   <span>Max: {sliderConfig.max}</span>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3. Nombre del Café y Tostadero */}

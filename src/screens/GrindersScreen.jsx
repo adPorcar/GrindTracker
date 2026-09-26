@@ -43,12 +43,13 @@ export const GrindersScreen = ({
 
   const openEditModal = (mill) => {
     setEditingMill(mill);
+    const isDial = String(mill.type || mill.tipo || 'clicks').toLowerCase() === 'dial';
     setFormData({
-      nombre: mill.nombre || '',
-      tipo: mill.tipo || 'clicks',
+      nombre: mill.name || mill.nombre || '',
+      tipo: isDial ? 'dial' : 'clicks',
       total_clicks: mill.total_clicks || 40,
-      total_numeros: mill.total_numeros || 10,
-      pasos_por_numero: mill.pasos_por_numero || 3
+      total_numeros: mill.total_dial_numbers || mill.total_numeros || 11,
+      pasos_por_numero: mill.dial_steps || mill.pasos_por_numero || 3
     });
     setErrorMsg('');
     setIsModalOpen(true);
@@ -70,14 +71,29 @@ export const GrindersScreen = ({
 
     setIsSubmitting(true);
     try {
+      const isDial = formData.tipo === 'dial';
+      const cleanName = formData.nombre.trim();
+      const millPayload = {
+        name: cleanName,
+        nombre: cleanName,
+        type: isDial ? 'Dial' : 'Clicks',
+        tipo: isDial ? 'dial' : 'clicks',
+        total_clicks: isDial ? null : (Number(formData.total_clicks) || 40),
+        total_dial_numbers: isDial ? (Number(formData.total_numeros) || 11) : null,
+        total_numeros: isDial ? (Number(formData.total_numeros) || 11) : null,
+        dial_steps: isDial ? (Number(formData.pasos_por_numero) || 3) : null,
+        pasos_por_numero: isDial ? (Number(formData.pasos_por_numero) || 3) : null
+      };
+
       if (editingMill) {
         await onUpdateMill({
           id: editingMill.id,
-          ...formData,
-          fecha_creacion: editingMill.fecha_creacion
+          ...millPayload,
+          created_at: editingMill.created_at || editingMill.fecha_creacion,
+          fecha_creacion: editingMill.fecha_creacion || editingMill.created_at
         });
       } else {
-        await onAddMill(formData);
+        await onAddMill(millPayload);
       }
       closeModal();
       setSuccessMsg(t('millSavedSuccess'));
@@ -123,9 +139,11 @@ export const GrindersScreen = ({
       {mills && mills.length > 0 ? (
         <div className="space-y-3.5">
           {mills.map((mill) => {
-            const isDial = mill.tipo === 'dial';
+            const isDial = String(mill.type || mill.tipo || 'clicks').toLowerCase() === 'dial';
+            const dialNumbers = mill.total_dial_numbers || mill.total_numeros || 0;
+            const dialSteps = mill.dial_steps || mill.pasos_por_numero || 1;
             const totalPositions = isDial
-              ? (Number(mill.total_numeros) || 0) * (Number(mill.pasos_por_numero) || 1)
+              ? (Number(dialNumbers) || 0) * (Number(dialSteps) || 1)
               : Number(mill.total_clicks) || 0;
 
             return (
@@ -145,10 +163,10 @@ export const GrindersScreen = ({
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-bold text-base text-coffee-900 dark:text-coffee-100 truncate">
-                        {mill.nombre}
+                        {mill.name || mill.nombre}
                       </h3>
                       <span className="text-[11px] text-coffee-400">
-                        {mill.fecha_creacion || t('today')}
+                        {mill.created_at || mill.fecha_creacion || t('today')}
                       </span>
                     </div>
                   </div>
@@ -174,7 +192,7 @@ export const GrindersScreen = ({
                           {t('totalNumbersLabel').replace(' *', '')}
                         </span>
                         <span className="font-mono font-bold text-coffee-800 dark:text-coffee-200">
-                          {mill.total_numeros} números
+                          {dialNumbers} números
                         </span>
                       </div>
                       <div>
@@ -182,7 +200,7 @@ export const GrindersScreen = ({
                           {t('stepsPerNumberLabel').replace(' *', '')}
                         </span>
                         <span className="font-mono font-bold text-coffee-800 dark:text-coffee-200">
-                          {mill.pasos_por_numero} pasos/núm
+                          {dialSteps} pasos/núm
                         </span>
                       </div>
                     </>
