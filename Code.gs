@@ -122,6 +122,8 @@ function doPost(e) {
         return handleDeleteGrind(data);
       case "updateUser":
         return handleUpdateUser(data);
+      case "repairSchema":
+        return handleRepairSchema(data);
       default:
         return createJsonResponse({
           success: false,
@@ -241,6 +243,7 @@ function handleLogin(data) {
         authSheet.getRange(rowNumber, 5).setValue(expiryDate);
 
         // Auto-sincronización y comprobación de pestañas 'molinos' y 'moliendas' en login
+        var syncWarning = null;
         if (rowSheetId) {
           try {
             var userSpreadsheet = SpreadsheetApp.openById(rowSheetId);
@@ -249,12 +252,15 @@ function handleLogin(data) {
             getOrCreateMolinosSheet(userSpreadsheet);
             SpreadsheetApp.flush();
           } catch (syncErr) {
-            Logger.log("Aviso de sincronización en login: " + syncErr.toString());
+            // Exponer el error en lugar de tragárselo silenciosamente
+            syncWarning = "Schema sync error: " + syncErr.toString();
+            Logger.log(syncWarning);
           }
         }
 
         return createJsonResponse({
           success: true,
+          sync_warning: syncWarning,
           user: {
             username: values[i][0],
             user_sheet_id: rowSheetId,
@@ -1148,11 +1154,90 @@ function ensureMoliendasSchema(sheet) {
   }
 
   sheet.clearContents();
+  SpreadsheetApp.flush(); // Forzar limpieza antes de reescribir
+  // Asegurar columnas suficientes tras clearContents (puede reducir columnas activas)
+  var maxColsAfterClear = sheet.getMaxColumns();
+  if (maxColsAfterClear < GRIND_HEADERS.length) {
+    sheet.insertColumnsAfter(maxColsAfterClear, GRIND_HEADERS.length - maxColsAfterClear);
+    SpreadsheetApp.flush();
+  }
   sheet.getRange(1, 1, newTable.length, GRIND_HEADERS.length).setValues(newTable);
   sheet.getRange(1, 1, 1, GRIND_HEADERS.length).setFontWeight("bold").setBackground("#E8DACF");
+  SpreadsheetApp.flush();
 }
 
 function createJsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * =========================================================================
+ * 6. REPARACIÓN FORZADA DE ESQUEMA (repairSchema)
+ * =========================================================================
+ * Endpoint de emergencia: fuerza la migración de 'moliendas' y crea 'molinos'
+ * sin necesidad de re-registrar al usuario.
+ * Uso: POST { action: "repairSchema", authSheetId, username, sessionToken, userSheetId }
+ */
+function handleRepairSchema(data) {
+  var authSheetId = sanitizeInput(data.authSheetId);
+  var username = sanitizeInput(data.username);
+  var sessionToken = sanitizeInput(data.sessionToken);
+  var userSheetId = sanitizeInput(data.userSheetId);
+
+  var session = validateSession(authSheetId, username, sessionToken, userSheetId);
+  if (!session.valid) {
+    return createJsonResponse({ success: false, unauthorized: session.unauthorized, message: session.message });
+  }
+
+  var report = {
+    moliendas: { status: "pending", headers: null, rows: 0 },
+    molinos: { status: "pending", headers: null, rows: 0 },
+    errors: []
+  };
+
+  try {
+    var ss = SpreadsheetApp.openById(userSheetId);
+
+    // --- Reparar 'moliendas' ---
+    try {
+      var moliendasSheet = getOrCreateMoliendasSheet(ss);
+      SpreadsheetApp.flush();
+      var moliendasData = moliendasSheet.getDataRange().getValues();
+      report.moliendas.status = "ok";
+      report.moliendas.headers = moliendasData.length > 0 ? moliendasData[0] : [];
+      report.moliendas.rows = moliendasData.length - 1;
+    } catch (e1) {
+      report.moliendas.status = "error";
+      report.errors.push("moliendas: " + e1.toString());
+    }
+
+    // --- Reparar 'molinos' ---
+    try {
+      var molinosSheet = getOrCreateMolinosSheet(ss);
+      SpreadsheetApp.flush();
+      var molinosData = molinosSheet.getDataRange().getValues();
+      report.molinos.status = "ok";
+      report.molinos.headers = molinosData.length > 0 ? molinosData[0] : [];
+      report.molinos.rows = molinosData.length - 1;
+    } catch (e2) {
+      report.molinos.status = "error";
+      report.errors.push("molinos: " + e2.toString());
+    }
+
+  } catch (mainErr) {
+    return createJsonResponse({
+      success: false,
+      message: "Error abriendo el spreadsheet: " + mainErr.toString(),
+      report: report
+    });
+  }
+
+  return createJsonResponse({
+    success: report.errors.length === 0,
+    message: report.errors.length === 0
+      ? "Schema reparado correctamente. Copia los headers y verifica en Google Sheets."
+      : "Reparación parcial con errores: " + report.errors.join(" | "),
+    report: report
+  });
 }
