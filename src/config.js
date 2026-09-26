@@ -5,7 +5,7 @@
  * para ser accesibles en el frontend tanto en local (.env) como en Vercel.
  */
 
-export const SCRIPT_URL = import.meta.env.BRIDGE_SCRIPT_URL || "";
+export const SCRIPT_URL = import.meta.env.VITE_SCRIPT_URL || "";
 export const AUTH_SHEET_ID = import.meta.env.VITE_AUTH_SHEET_ID || "";
 export const DRIVE_FOLDER_ID = import.meta.env.VITE_DRIVE_FOLDER_ID || "";
 
