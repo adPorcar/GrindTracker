@@ -244,8 +244,10 @@ function handleLogin(data) {
         if (rowSheetId) {
           try {
             var userSpreadsheet = SpreadsheetApp.openById(rowSheetId);
-            getOrCreateMolinosSheet(userSpreadsheet);
             getOrCreateMoliendasSheet(userSpreadsheet);
+            SpreadsheetApp.flush();
+            getOrCreateMolinosSheet(userSpreadsheet);
+            SpreadsheetApp.flush();
           } catch (syncErr) {
             Logger.log("Aviso de sincronización en login: " + syncErr.toString());
           }
@@ -309,8 +311,11 @@ function handleRegister(data) {
   DriveApp.getRootFolder().removeFile(file);
 
   // Inicializar pestañas 'moliendas' y 'molinos' con cabeceras estándar
+  // IMPORTANTE: flush() garantiza que los cambios se escriben antes de continuar
   getOrCreateMoliendasSheet(newSpreadsheet);
+  SpreadsheetApp.flush();
   getOrCreateMolinosSheet(newSpreadsheet);
+  SpreadsheetApp.flush();
 
   // 3. Generar Session Token y registrar credenciales en Auth Sheet
   var sessionToken = Utilities.getUuid();
@@ -898,8 +903,10 @@ function getOrCreateMolinosSheet(spreadsheet) {
   var sheet = spreadsheet.getSheetByName("molinos");
   if (!sheet) {
     sheet = spreadsheet.insertSheet("molinos");
+    SpreadsheetApp.flush();
   }
   ensureMolinosSchema(sheet);
+  SpreadsheetApp.flush();
   return sheet;
 }
 
@@ -908,10 +915,18 @@ function getOrCreateMolinosSheet(spreadsheet) {
  * Cabeceras: id | name | type | total_clicks | total_dial_numbers | dial_steps | created_at
  */
 function ensureMolinosSchema(sheet) {
+  // Garantizar que hay suficientes columnas antes de escribir
+  var maxCols = sheet.getMaxColumns();
+  if (maxCols < MOLINOS_HEADERS.length) {
+    sheet.insertColumnsAfter(maxCols, MOLINOS_HEADERS.length - maxCols);
+    SpreadsheetApp.flush();
+  }
+
   var lastRow = sheet.getLastRow();
   if (lastRow === 0) {
     sheet.getRange(1, 1, 1, MOLINOS_HEADERS.length).setValues([MOLINOS_HEADERS]);
     sheet.getRange(1, 1, 1, MOLINOS_HEADERS.length).setFontWeight("bold").setBackground("#D5BEB0");
+    SpreadsheetApp.flush();
     return;
   }
 
@@ -996,15 +1011,20 @@ function ensureMolinosSchema(sheet) {
 function getOrCreateMoliendasSheet(spreadsheet) {
   var sheet = spreadsheet.getSheetByName("moliendas");
   if (!sheet) {
-    var firstSheet = spreadsheet.getSheets()[0];
+    var allSheets = spreadsheet.getSheets();
+    var firstSheet = allSheets[0];
+    // Renombrar la primera pestaña solo si no es ya 'molinos'
     if (firstSheet && firstSheet.getName() !== "molinos") {
       sheet = firstSheet;
       sheet.setName("moliendas");
     } else {
-      sheet = spreadsheet.insertSheet("moliendas");
+      // La primera pestaña ya es 'molinos', crear una nueva 'moliendas'
+      sheet = spreadsheet.insertSheet("moliendas", 0); // insertar en posición 0 (antes de molinos)
     }
+    SpreadsheetApp.flush();
   }
   ensureMoliendasSchema(sheet);
+  SpreadsheetApp.flush();
   return sheet;
 }
 
@@ -1019,10 +1039,18 @@ function getMoliendasSheet(spreadsheet) {
  * Mantiene intactos todos los registros previos de esquemas de 7 columnas o versiones anteriores.
  */
 function ensureMoliendasSchema(sheet) {
+  // Garantizar que hay suficientes columnas antes de escribir
+  var maxCols = sheet.getMaxColumns();
+  if (maxCols < GRIND_HEADERS.length) {
+    sheet.insertColumnsAfter(maxCols, GRIND_HEADERS.length - maxCols);
+    SpreadsheetApp.flush();
+  }
+
   var lastRow = sheet.getLastRow();
   if (lastRow === 0) {
     sheet.getRange(1, 1, 1, GRIND_HEADERS.length).setValues([GRIND_HEADERS]);
     sheet.getRange(1, 1, 1, GRIND_HEADERS.length).setFontWeight("bold").setBackground("#E8DACF");
+    SpreadsheetApp.flush();
     return;
   }
 
