@@ -1116,6 +1116,36 @@ function getMoliendasSheet(spreadsheet) {
 }
 
 /**
+ * Alias de retrocompatibilidad: repara y sincroniza las cabeceras de las hojas
+ */
+function repairSheetHeaders(sheetOrSpreadsheet) {
+  if (!sheetOrSpreadsheet) return null;
+  try {
+    // Si se pasa un Spreadsheet (libro completo)
+    if (typeof sheetOrSpreadsheet.getSheetByName === "function") {
+      var sMoliendas = getOrCreateMoliendasSheet(sheetOrSpreadsheet);
+      var sMolinos = getOrCreateMolinosSheet(sheetOrSpreadsheet);
+      SpreadsheetApp.flush();
+      return { moliendas: sMoliendas, molinos: sMolinos };
+    }
+    // Si se pasa una Sheet (hoja individual)
+    if (typeof sheetOrSpreadsheet.getName === "function") {
+      var sheetName = String(sheetOrSpreadsheet.getName()).toLowerCase();
+      if (sheetName === "molinos") {
+        ensureMolinosSchema(sheetOrSpreadsheet);
+      } else {
+        ensureMoliendasSchema(sheetOrSpreadsheet);
+      }
+      SpreadsheetApp.flush();
+      return sheetOrSpreadsheet;
+    }
+  } catch (err) {
+    Logger.log("Aviso en repairSheetHeaders: " + err.toString());
+  }
+  return sheetOrSpreadsheet;
+}
+
+/**
  * Migra o inicializa automáticamente la pestaña 'moliendas' a la estructura requerida
  * Cabeceras: id | molino | coffee_name | roaster | metodo | variedad | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | grado | comentario | fecha
  * Mantiene intactos todos los registros previos de esquemas de 7 columnas o versiones anteriores.

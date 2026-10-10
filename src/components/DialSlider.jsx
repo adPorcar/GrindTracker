@@ -1,19 +1,22 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { Minus, Plus, Disc } from 'lucide-react';
 
 /**
- * Mahlkönig-style Dial Ruler Slider Component
+ * Premium Cylindrical Drum Dial Selector
  * 
- * Step logic:
- * When dialSteps = 4, the sequence between 4 and 5 is:
- * 4.0 -> 4.1 -> 4.2 -> 4.3 -> 4.4 -> 5.0
+ * A realistic horizontal rotating cylinder/ring component inspired by
+ * manual coffee grinder adjustment rings (1Zpresso / Timemore / Fellow Ode).
  * 
  * Features:
- * - Starts at whole integer (0 or 1) up to totalNumbers.
- * - Subdivisions between each integer X are X.1, X.2, ... X.dialSteps, followed by X+1.0.
- * - Calibrated horizontal ruler with prominent major numbers and sub-ticks for each point.
- * - Touch-friendly slider thumb with drag tracking for mobile screens.
- * - Displays both the formatted decimal value (e.g. 4.3) and the descriptive step (e.g. paso 3 de 4).
+ * - 3D cylindrical perspective with center-focused curvature
+ * - Laser-etched style tick marks and numbers on brushed dark metal
+ * - Fixed red indicator triangle at top center
+ * - Touch + mouse drag rotation with momentum
+ * - Snap-to-nearest step behavior
+ * - Sub-tick marks between major numbers based on dialSteps setting
+ * 
+ * Step logic (dialSteps = 4):
+ *   4.0 → 4.1 → 4.2 → 4.3 → 4.4 → 5.0
  */
 export const DialSlider = ({
   value = 0,
@@ -27,98 +30,211 @@ export const DialSlider = ({
   const minVal = Number(min) || 0;
   const maxVal = Number(totalNumbers) || 11;
   const stepsPerNum = Math.max(1, Number(dialSteps) || 1);
-  const clicksPerNumber = stepsPerNum + 1; // e.g. for 4: 0, .1, .2, .3, .4 -> 5 total clicks per whole integer
+  const clicksPerNumber = stepsPerNum + 1;
   const totalClicks = (maxVal - minVal) * clicksPerNumber;
 
-  const [isDragging, setIsDragging] = useState(false);
-  const containerRef = useRef(null);
+  const drumRef = useRef(null);
+  const dragState = useRef({
+    isDragging: false,
+    startX: 0,
+    startClickIndex: 0,
+    velocity: 0,
+    lastX: 0,
+    lastTime: 0,
+    animationFrame: null
+  });
 
-  // Convert discrete click index (0..totalClicks) to decimal value (e.g. 4.0, 4.1, ..., 4.4, 5.0)
-  const clickIndexToValue = (clickIndex) => {
-    const major = minVal + Math.floor(clickIndex / clicksPerNumber);
-    const subStep = clickIndex % clicksPerNumber;
-    if (major >= maxVal) {
-      return parseFloat(maxVal.toFixed(1));
-    }
-    const val = major + subStep * 0.1;
-    return parseFloat(val.toFixed(1));
-  };
+  // Convert click index → value (e.g., 4.0, 4.1, ..., 4.4, 5.0)
+  const clickIndexToValue = useCallback((clickIndex) => {
+    const clamped = Math.max(0, Math.min(totalClicks, Math.round(clickIndex)));
+    const major = minVal + Math.floor(clamped / clicksPerNumber);
+    const subStep = clamped % clicksPerNumber;
+    if (major >= maxVal) return parseFloat(maxVal.toFixed(1));
+    return parseFloat((major + subStep * 0.1).toFixed(1));
+  }, [minVal, maxVal, clicksPerNumber, totalClicks]);
 
-  // Convert decimal value (e.g. 4.3) back to discrete click index
-  const valueToClickIndex = (val) => {
+  // Convert value → click index
+  const valueToClickIndex = useCallback((val) => {
     let parsed = parseFloat(val);
     if (isNaN(parsed)) parsed = minVal;
     parsed = Math.max(minVal, Math.min(maxVal, parsed));
     const major = Math.floor(parsed);
-    if (major >= maxVal) {
-      return totalClicks;
-    }
+    if (major >= maxVal) return totalClicks;
     const fraction = parsed - major;
     let subStep = Math.round(fraction * 10);
     if (subStep > stepsPerNum) subStep = stepsPerNum;
     return (major - minVal) * clicksPerNumber + subStep;
-  };
+  }, [minVal, maxVal, stepsPerNum, clicksPerNumber, totalClicks]);
 
-  // Current discrete click index
-  const currentClickIndex = useMemo(() => {
-    return valueToClickIndex(value);
-  }, [value, minVal, maxVal, stepsPerNum, clicksPerNumber]);
+  const currentClickIndex = useMemo(() => valueToClickIndex(value), [value, valueToClickIndex]);
+  const currentValue = useMemo(() => clickIndexToValue(currentClickIndex), [currentClickIndex, clickIndexToValue]);
 
-  // Current normalized decimal value
-  const currentValue = useMemo(() => {
-    return clickIndexToValue(currentClickIndex);
-  }, [currentClickIndex, minVal, maxVal, clicksPerNumber]);
-
-  // Breakdown for descriptive display
   const { majorNumber, subStepIndex } = useMemo(() => {
     const major = Math.floor(currentValue);
     const sub = Math.round((currentValue - major) * 10);
-    return {
-      majorNumber: major,
-      subStepIndex: sub
-    };
+    return { majorNumber: major, subStepIndex: sub };
   }, [currentValue]);
 
   // Stepper handlers
   const handleStepChange = (delta) => {
     if (disabled) return;
     const nextClick = Math.max(0, Math.min(totalClicks, currentClickIndex + delta));
-    const nextVal = clickIndexToValue(nextClick);
-    onChange(nextVal);
+    onChange(clickIndexToValue(nextClick));
   };
 
-  // Percentage for needle tracking
-  const percentage = useMemo(() => {
-    if (totalClicks <= 0) return 0;
-    return Math.max(0, Math.min(100, (currentClickIndex / totalClicks) * 100));
-  }, [currentClickIndex, totalClicks]);
-
-  // Array of major numbers [min..max]
-  const majorNumbers = useMemo(() => {
-    const list = [];
-    for (let i = minVal; i <= maxVal; i++) {
-      list.push(i);
+  // Generate ALL tick positions for the drum
+  const drumTicks = useMemo(() => {
+    const ticks = [];
+    for (let i = 0; i <= totalClicks; i++) {
+      const major = minVal + Math.floor(i / clicksPerNumber);
+      const sub = i % clicksPerNumber;
+      const isMajor = sub === 0;
+      const isMid = stepsPerNum >= 4 && sub === Math.ceil(stepsPerNum / 2);
+      
+      let label = null;
+      if (isMajor) {
+        label = String(major);
+      }
+      
+      ticks.push({
+        index: i,
+        isMajor,
+        isMid,
+        label,
+        value: clickIndexToValue(i)
+      });
     }
-    return list;
-  }, [minVal, maxVal]);
+    return ticks;
+  }, [totalClicks, minVal, clicksPerNumber, stepsPerNum, clickIndexToValue]);
 
-  // Direct click or touch on ruler track
-  const handleTrackPointer = (e) => {
-    if (disabled || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX);
-    if (clientX === undefined) return;
+  // Pixel width per tick step on the drum
+  const PX_PER_TICK = 18;
+  const DRUM_VISIBLE_WIDTH = 320; // approximate visible viewport width
 
-    const clickX = Math.max(0, Math.min(rect.width, clientX - rect.left));
-    const ratio = clickX / rect.width;
-    const targetClick = Math.round(ratio * totalClicks);
-    const clampedClick = Math.max(0, Math.min(totalClicks, targetClick));
-    onChange(clickIndexToValue(clampedClick));
+  // Calculate drum scroll offset so current click index is centered
+  const drumOffset = useMemo(() => {
+    return -(currentClickIndex * PX_PER_TICK) + DRUM_VISIBLE_WIDTH / 2;
+  }, [currentClickIndex]);
+
+  // Total drum content width
+  const drumContentWidth = totalClicks * PX_PER_TICK;
+
+  // 3D perspective: calculate opacity and scale for each tick based on distance from center
+  const getTickStyle = useCallback((tickIndex) => {
+    const distFromCenter = Math.abs(tickIndex - currentClickIndex);
+    const maxVisibleTicks = DRUM_VISIBLE_WIDTH / PX_PER_TICK / 2;
+    const normalizedDist = Math.min(distFromCenter / maxVisibleTicks, 1);
+    
+    // Cylindrical curvature: scale down and fade as distance increases
+    const scale = 1 - normalizedDist * 0.35;
+    const opacity = 1 - normalizedDist * 0.7;
+    
+    return { scale: Math.max(0.4, scale), opacity: Math.max(0.15, opacity) };
+  }, [currentClickIndex]);
+
+  // Touch/Mouse drag handling
+  const getClientX = (e) => {
+    if (e.touches && e.touches.length > 0) return e.touches[0].clientX;
+    if (e.changedTouches && e.changedTouches.length > 0) return e.changedTouches[0].clientX;
+    return e.clientX;
   };
+
+  const handleDragStart = useCallback((e) => {
+    if (disabled) return;
+    e.preventDefault();
+    const clientX = getClientX(e);
+    
+    if (dragState.current.animationFrame) {
+      cancelAnimationFrame(dragState.current.animationFrame);
+      dragState.current.animationFrame = null;
+    }
+    
+    dragState.current = {
+      ...dragState.current,
+      isDragging: true,
+      startX: clientX,
+      startClickIndex: currentClickIndex,
+      velocity: 0,
+      lastX: clientX,
+      lastTime: Date.now()
+    };
+  }, [disabled, currentClickIndex]);
+
+  const handleDragMove = useCallback((e) => {
+    if (!dragState.current.isDragging) return;
+    e.preventDefault();
+    const clientX = getClientX(e);
+    const deltaX = dragState.current.startX - clientX;
+    const deltaTicks = deltaX / PX_PER_TICK;
+    const newClickIndex = Math.max(0, Math.min(totalClicks, 
+      Math.round(dragState.current.startClickIndex + deltaTicks)));
+    
+    // Track velocity for momentum
+    const now = Date.now();
+    const dt = now - dragState.current.lastTime;
+    if (dt > 0) {
+      dragState.current.velocity = (dragState.current.lastX - clientX) / dt;
+    }
+    dragState.current.lastX = clientX;
+    dragState.current.lastTime = now;
+    
+    onChange(clickIndexToValue(newClickIndex));
+  }, [totalClicks, clickIndexToValue, onChange]);
+
+  const handleDragEnd = useCallback((e) => {
+    if (!dragState.current.isDragging) return;
+    dragState.current.isDragging = false;
+    
+    // Apply momentum
+    const velocity = dragState.current.velocity;
+    if (Math.abs(velocity) > 0.15) {
+      const momentum = velocity * 120; // pixels of inertia
+      const extraTicks = Math.round(momentum / PX_PER_TICK);
+      const targetClick = Math.max(0, Math.min(totalClicks, currentClickIndex + extraTicks));
+      
+      // Animate to target with deceleration
+      let progress = 0;
+      const animate = () => {
+        progress += 0.08;
+        if (progress >= 1) {
+          onChange(clickIndexToValue(targetClick));
+          return;
+        }
+        // Ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const intermediateClick = Math.round(currentClickIndex + (targetClick - currentClickIndex) * eased);
+        const clamped = Math.max(0, Math.min(totalClicks, intermediateClick));
+        onChange(clickIndexToValue(clamped));
+        dragState.current.animationFrame = requestAnimationFrame(animate);
+      };
+      dragState.current.animationFrame = requestAnimationFrame(animate);
+    }
+  }, [currentClickIndex, totalClicks, clickIndexToValue, onChange]);
+
+  // Attach global listeners for drag
+  useEffect(() => {
+    const moveHandler = (e) => handleDragMove(e);
+    const endHandler = (e) => handleDragEnd(e);
+    
+    window.addEventListener('mousemove', moveHandler);
+    window.addEventListener('mouseup', endHandler);
+    window.addEventListener('touchmove', moveHandler, { passive: false });
+    window.addEventListener('touchend', endHandler);
+    
+    return () => {
+      window.removeEventListener('mousemove', moveHandler);
+      window.removeEventListener('mouseup', endHandler);
+      window.removeEventListener('touchmove', moveHandler);
+      window.removeEventListener('touchend', endHandler);
+      if (dragState.current.animationFrame) {
+        cancelAnimationFrame(dragState.current.animationFrame);
+      }
+    };
+  }, [handleDragMove, handleDragEnd]);
 
   return (
-    <div className="space-y-3.5 bg-coffee-100/40 dark:bg-darkbg-input/40 p-4 rounded-3xl border border-coffee-200/70 dark:border-darkbg-border">
-      {/* Top Header: Badge & Value display */}
+    <div className="space-y-3">
+      {/* Header Row: Badge + Readout */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
@@ -134,7 +250,7 @@ export const DialSlider = ({
           </div>
         </div>
 
-        {/* Current Readout */}
+        {/* Digital readout */}
         <div className="flex items-baseline gap-1.5 px-3.5 py-1.5 rounded-2xl bg-white dark:bg-darkbg-card border border-coffee-200 dark:border-darkbg-border shadow-xs">
           <span className="text-xl font-black font-mono text-terracotta tracking-tight">
             {currentValue.toFixed(1)}
@@ -145,7 +261,277 @@ export const DialSlider = ({
         </div>
       </div>
 
-      {/* Stepper Controls + Indicator Bar */}
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/*  3D CYLINDRICAL DRUM DIAL                             */}
+      {/* ═══════════════════════════════════════════════════════ */}
+      <div className="relative select-none" style={{ touchAction: 'none' }}>
+        
+        {/* Metallic housing frame */}
+        <div 
+          style={{
+            background: 'linear-gradient(180deg, #2a2520 0%, #1a1612 35%, #0f0d0b 100%)',
+            borderRadius: '20px',
+            padding: '2px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)'
+          }}
+        >
+          {/* Inner bezel */}
+          <div
+            style={{
+              background: 'linear-gradient(180deg, #1e1a16 0%, #141210 50%, #1e1a16 100%)',
+              borderRadius: '18px',
+              padding: '3px 0',
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Top metallic highlight line */}
+            <div style={{
+              position: 'absolute',
+              top: 0, left: '10%', right: '10%',
+              height: '1px',
+              background: 'linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.3), transparent)',
+              zIndex: 20
+            }} />
+
+            {/* Fixed Indicator Arrow at top center */}
+            <div style={{
+              position: 'absolute',
+              top: '0px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 30,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}>
+              <div style={{
+                width: 0,
+                height: 0,
+                borderLeft: '7px solid transparent',
+                borderRight: '7px solid transparent',
+                borderTop: '10px solid #d9534f',
+                filter: 'drop-shadow(0 0 6px rgba(217, 83, 79, 0.8))'
+              }} />
+              <div style={{
+                width: '2px',
+                height: '100%',
+                minHeight: '110px',
+                background: 'linear-gradient(180deg, #d9534f 0%, rgba(217,83,79,0.1) 100%)',
+                position: 'absolute',
+                top: '10px'
+              }} />
+            </div>
+
+            {/* ── The Drum Surface ── */}
+            <div
+              ref={drumRef}
+              onMouseDown={handleDragStart}
+              onTouchStart={handleDragStart}
+              style={{
+                height: '120px',
+                cursor: disabled ? 'default' : 'grab',
+                position: 'relative',
+                overflow: 'hidden',
+                // 3D cylindrical perspective
+                perspective: '600px',
+                perspectiveOrigin: '50% 50%'
+              }}
+            >
+              {/* Cylindrical curvature overlay — top shadow */}
+              <div style={{
+                position: 'absolute',
+                top: 0, left: 0, right: 0,
+                height: '30%',
+                background: 'linear-gradient(180deg, rgba(10,8,6,0.85) 0%, transparent 100%)',
+                zIndex: 15,
+                pointerEvents: 'none',
+                borderRadius: '18px 18px 0 0'
+              }} />
+              {/* Cylindrical curvature overlay — bottom shadow */}
+              <div style={{
+                position: 'absolute',
+                bottom: 0, left: 0, right: 0,
+                height: '30%',
+                background: 'linear-gradient(0deg, rgba(10,8,6,0.85) 0%, transparent 100%)',
+                zIndex: 15,
+                pointerEvents: 'none',
+                borderRadius: '0 0 18px 18px'
+              }} />
+              {/* Left fade */}
+              <div style={{
+                position: 'absolute',
+                top: 0, bottom: 0, left: 0,
+                width: '60px',
+                background: 'linear-gradient(90deg, rgba(14,12,10,0.95) 0%, transparent 100%)',
+                zIndex: 16,
+                pointerEvents: 'none'
+              }} />
+              {/* Right fade */}
+              <div style={{
+                position: 'absolute',
+                top: 0, bottom: 0, right: 0,
+                width: '60px',
+                background: 'linear-gradient(270deg, rgba(14,12,10,0.95) 0%, transparent 100%)',
+                zIndex: 16,
+                pointerEvents: 'none'
+              }} />
+
+              {/* Brushed metal texture background */}
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: `
+                  repeating-linear-gradient(
+                    90deg,
+                    rgba(255,255,255,0.008) 0px,
+                    rgba(255,255,255,0.015) 1px,
+                    transparent 1px,
+                    transparent 3px
+                  ),
+                  radial-gradient(ellipse at 50% 50%, #1c1916 0%, #0e0c0a 100%)
+                `,
+                borderRadius: '16px'
+              }} />
+
+              {/* Tick marks container — slides horizontally */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  height: '100%',
+                  width: `${drumContentWidth + DRUM_VISIBLE_WIDTH}px`,
+                  transform: `translateX(${drumOffset}px)`,
+                  transition: dragState.current.isDragging ? 'none' : 'transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                {drumTicks.map((tick) => {
+                  const { scale, opacity } = getTickStyle(tick.index);
+                  const isSelected = tick.index === currentClickIndex;
+                  
+                  return (
+                    <div
+                      key={tick.index}
+                      style={{
+                        position: 'absolute',
+                        left: `${tick.index * PX_PER_TICK}px`,
+                        width: `${PX_PER_TICK}px`,
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transform: `scaleY(${scale})`,
+                        opacity,
+                        transition: dragState.current.isDragging ? 'none' : 'transform 0.15s ease, opacity 0.15s ease'
+                      }}
+                    >
+                      {/* Major number label (above tick) */}
+                      {tick.isMajor && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: '14px',
+                            fontFamily: "'SF Mono', 'Roboto Mono', 'Fira Code', monospace",
+                            fontSize: isSelected ? '18px' : '14px',
+                            fontWeight: isSelected ? 900 : 600,
+                            color: isSelected ? '#d4af37' : 'rgba(180, 160, 130, 0.7)',
+                            textShadow: isSelected ? '0 0 12px rgba(212,175,55,0.5)' : 'none',
+                            letterSpacing: '-0.5px',
+                            transition: 'all 0.15s ease',
+                            userSelect: 'none'
+                          }}
+                        >
+                          {tick.label}
+                        </span>
+                      )}
+
+                      {/* Tick line */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: tick.isMajor ? '16px' : '24px',
+                          width: tick.isMajor ? '2px' : tick.isMid ? '1.5px' : '1px',
+                          height: tick.isMajor ? '36px' : tick.isMid ? '22px' : '14px',
+                          background: tick.isMajor
+                            ? (isSelected 
+                              ? 'linear-gradient(180deg, #d4af37 0%, rgba(212,175,55,0.4) 100%)' 
+                              : 'linear-gradient(180deg, rgba(180,160,130,0.8) 0%, rgba(180,160,130,0.2) 100%)')
+                            : tick.isMid
+                            ? 'linear-gradient(180deg, rgba(150,135,110,0.6) 0%, rgba(150,135,110,0.15) 100%)'
+                            : 'linear-gradient(180deg, rgba(120,110,90,0.45) 0%, rgba(120,110,90,0.1) 100%)',
+                          borderRadius: '1px',
+                          boxShadow: isSelected && tick.isMajor ? '0 0 8px rgba(212,175,55,0.4)' : 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                      />
+
+                      {/* Sub-step number for non-zero substeps on major ticks */}
+                      {tick.isMajor && !isSelected && tick.index > 0 && tick.index < totalClicks && (
+                        <span style={{
+                          position: 'absolute',
+                          bottom: '4px',
+                          fontSize: '8px',
+                          fontFamily: "'SF Mono', monospace",
+                          color: 'rgba(140,125,100,0.3)',
+                          userSelect: 'none'
+                        }}>
+                          .0
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Center highlight glow (where indicator points) */}
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '40px',
+                height: '100%',
+                background: 'radial-gradient(ellipse at center, rgba(217,83,79,0.06) 0%, transparent 70%)',
+                pointerEvents: 'none',
+                zIndex: 14
+              }} />
+            </div>
+
+            {/* Bottom metallic highlight */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0, left: '10%', right: '10%',
+              height: '1px',
+              background: 'linear-gradient(90deg, transparent, rgba(180,160,130,0.15), transparent)',
+              zIndex: 20
+            }} />
+          </div>
+        </div>
+
+        {/* Knurling texture strips (top and bottom of housing) */}
+        <div style={{
+          position: 'absolute',
+          top: '-3px', left: '15%', right: '15%',
+          height: '3px',
+          background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 2px, transparent 2px, transparent 4px)',
+          borderRadius: '2px 2px 0 0'
+        }} />
+        <div style={{
+          position: 'absolute',
+          bottom: '-3px', left: '15%', right: '15%',
+          height: '3px',
+          background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 2px, transparent 2px, transparent 4px)',
+          borderRadius: '0 0 2px 2px'
+        }} />
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/*  STEPPER CONTROLS                                      */}
+      {/* ═══════════════════════════════════════════════════════ */}
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -158,7 +544,7 @@ export const DialSlider = ({
           <Minus className="w-4 h-4" />
         </button>
 
-        {/* Big Touch Stepper Bar */}
+        {/* Position display */}
         <div className="flex-1 text-center py-2 px-3 rounded-2xl bg-white dark:bg-darkbg-card border border-coffee-200 dark:border-darkbg-border font-mono text-sm font-bold text-coffee-800 dark:text-coffee-200 shadow-xs flex items-center justify-center gap-2">
           <span>Posición {majorNumber}</span>
           <span className="text-xs text-coffee-400">
@@ -178,108 +564,13 @@ export const DialSlider = ({
         </button>
       </div>
 
-      {/* MAHLKÖNIG-STYLE HORIZONTAL DIAL RULER */}
-      <div className="relative pt-4 pb-2 px-2 select-none">
-        {/* Ruler Track Container */}
-        <div
-          ref={containerRef}
-          onClick={handleTrackPointer}
-          className="relative h-14 bg-coffee-900 dark:bg-black rounded-2xl p-2 cursor-pointer shadow-inner overflow-hidden border border-coffee-800"
-        >
-          {/* Subtle Top Metallic Glow Line */}
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-coffee-600 via-amber-400 to-coffee-600 opacity-60" />
-
-          {/* Major Numbers Row */}
-          <div className="relative h-5 flex justify-between items-center text-[10px] font-mono font-bold text-coffee-300 pointer-events-none px-1">
-            {majorNumbers.map((num) => {
-              const isActive = majorNumber === num;
-              return (
-                <span
-                  key={num}
-                  className={`transition-colors text-center w-4 ${
-                    isActive ? 'text-amber-400 font-black scale-110' : 'text-coffee-400/80'
-                  }`}
-                >
-                  {num}
-                </span>
-              );
-            })}
-          </div>
-
-          {/* Tick Marks Ruler Line */}
-          <div className="relative h-5 flex justify-between items-end px-1 pointer-events-none">
-            {majorNumbers.map((num, i) => {
-              const isLast = i === majorNumbers.length - 1;
-              return (
-                <div key={num} className="flex-1 flex justify-between items-end h-full">
-                  {/* Major Tick (Tallest for integer number) */}
-                  <div className="w-[2px] h-4 bg-amber-400/90 rounded-full" />
-
-                  {/* Subdivisions .1, .2, ..., .dialSteps between this number and the next */}
-                  {!isLast &&
-                    Array.from({ length: stepsPerNum }).map((_, stepIdx) => {
-                      const isMid = stepsPerNum % 2 === 0 && stepIdx === stepsPerNum / 2 - 1;
-                      return (
-                        <div
-                          key={stepIdx}
-                          className={`rounded-full ${
-                            isMid
-                              ? 'w-[1.5px] h-2.5 bg-coffee-200/80'
-                              : 'w-[1px] h-1.5 bg-coffee-400/60'
-                          }`}
-                        />
-                      );
-                    })}
-
-                  {/* Final edge tick */}
-                  {isLast && (
-                    <div className="w-[2px] h-4 bg-amber-400/90 rounded-full ml-auto" />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Precision Needle Pointer */}
-          <div
-            className="absolute top-0 bottom-0 pointer-events-none transition-all duration-75 flex flex-col items-center"
-            style={{
-              left: `${percentage}%`,
-              transform: 'translateX(-50%)'
-            }}
-          >
-            {/* Needle Top Arrow */}
-            <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] border-t-terracotta" />
-            {/* Needle Line */}
-            <div className="w-[2px] flex-1 bg-terracotta shadow-[0_0_8px_rgba(217,83,79,0.9)]" />
-          </div>
-        </div>
-
-        {/* Range Slider for direct dragging */}
-        <input
-          type="range"
-          min={0}
-          max={totalClicks}
-          step={1}
-          value={currentClickIndex}
-          onChange={(e) => onChange(clickIndexToValue(parseInt(e.target.value)))}
-          onMouseDown={() => setIsDragging(true)}
-          onMouseUp={() => setIsDragging(false)}
-          onTouchStart={() => setIsDragging(true)}
-          onTouchEnd={() => setIsDragging(false)}
-          disabled={disabled}
-          className="absolute inset-x-2 bottom-1 h-8 opacity-0 cursor-ew-resize z-20"
-          aria-label="Ajuste de grado en dial"
-        />
-
-        {/* Legend / Range Extents */}
-        <div className="flex justify-between items-center text-[10px] text-coffee-500 dark:text-coffee-400 font-mono mt-1 px-1">
-          <span>Min: {minVal.toFixed(1)}</span>
-          <span className="text-[10px] font-semibold text-terracotta">
-            Escala: 4, 4.1... 4.{stepsPerNum} → 5
-          </span>
-          <span>Max: {maxVal.toFixed(1)}</span>
-        </div>
+      {/* Range extents legend */}
+      <div className="flex justify-between items-center text-[10px] text-coffee-500 dark:text-coffee-400 font-mono px-1">
+        <span>Min: {minVal.toFixed(1)}</span>
+        <span className="text-[10px] font-semibold text-terracotta">
+          Escala: {minVal}, {minVal}.1... {minVal}.{stepsPerNum} → {minVal + 1}
+        </span>
+        <span>Max: {maxVal.toFixed(1)}</span>
       </div>
     </div>
   );
