@@ -68,11 +68,32 @@ const SUGGESTED_FLAVORS = [
 export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
   const { t } = useLanguage();
 
+  // Cleaned and normalized list of mills with guaranteed non-empty unique IDs
+  const validMills = useMemo(() => {
+    if (!Array.isArray(mills)) return [];
+    return mills
+      .filter((m) => m && typeof m === 'object')
+      .map((m, idx) => ({
+        ...m,
+        id: String(m.id || m.nombre || m.name || `mill_${idx}_${Date.now()}`),
+        nombre: m.nombre || m.name || `Molino ${idx + 1}`
+      }));
+  }, [mills]);
+
   // Selected mill state
-  const [selectedMillId, setSelectedMillId] = useState(mills[0]?.id || '');
+  const [selectedMillId, setSelectedMillId] = useState(() => (mills[0]?.id ? String(mills[0].id) : ''));
+
+  // Active mill ID: guarantees that a valid mill ID is selected whenever mills exist
+  const activeMillId = useMemo(() => {
+    if (validMills.length === 0) return '';
+    const found = validMills.find((m) => String(m.id) === String(selectedMillId));
+    return found ? String(found.id) : String(validMills[0].id);
+  }, [validMills, selectedMillId]);
+
   const activeMill = useMemo(() => {
-    return mills.find((m) => String(m.id) === String(selectedMillId)) || mills[0] || null;
-  }, [mills, selectedMillId]);
+    if (validMills.length === 0) return null;
+    return validMills.find((m) => String(m.id) === activeMillId) || validMills[0] || null;
+  }, [validMills, activeMillId]);
 
   // Form fields
   const [nombreCafe, setNombreCafe] = useState('');
@@ -94,13 +115,14 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
   const [comentario, setComentario] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Sync selected mill when mills list updates
   useEffect(() => {
-    if (!selectedMillId && mills.length > 0) {
-      setSelectedMillId(mills[0].id);
+    if (mills.length > 0 && activeMillId && selectedMillId !== activeMillId) {
+      setSelectedMillId(activeMillId);
     }
-  }, [mills, selectedMillId]);
+  }, [mills, activeMillId, selectedMillId]);
 
   // Calculate dynamic slider configuration according to selected mill
   const sliderConfig = useMemo(() => {
@@ -215,36 +237,64 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!activeMill) return;
-    if (!nombreCafe.trim() || !tostadero.trim() || !pais.trim()) return;
+    const effectiveMill = activeMill || mills[0];
+    if (!effectiveMill) {
+      setErrorMsg('Por favor, registra o selecciona un molino primero.');
+      return;
+    }
+    if (!nombreCafe.trim() || !tostadero.trim() || !pais.trim()) {
+      setErrorMsg('Por favor, completa los campos requeridos (Café, Tostadero y País).');
+      return;
+    }
 
     if (metodo === 'Espresso') {
       if (!cafeIn || !cafeOut || parseFloat(cafeIn) <= 0 || parseFloat(cafeOut) <= 0) {
-        alert('Para el método Espresso, los campos Café IN y Café OUT son obligatorios.');
+        setErrorMsg('Para el método Espresso, los campos Café IN y Café OUT son obligatorios.');
         return;
       }
     }
 
     setSubmitting(true);
-    try {
-      const gradoToSave = parseFloat(grado) || 0;
+    setErrorMsg('');
+    setShowSuccess(false);
 
-      await onSave({
-        molino: activeMill.nombre,
+    try {
+      const gradoToSave = sliderConfig.isDial
+        ? (grado !== undefined && grado !== null && grado !== '' ? grado : formatDialValue(dialStep, sliderConfig.stepsPerNum))
+        : (parseFloat(grado) || 0);
+
+      const grindPayload = {
+        molino: effectiveMill.nombre || effectiveMill.name || '',
         nombre_cafe: nombreCafe.trim(),
+        coffee_name: nombreCafe.trim(),
         tostadero: tostadero.trim(),
+        roaster: tostadero.trim(),
         metodo,
         variedad,
         proceso,
         pais: pais.trim(),
         perfil_sabor: perfilSabor.trim(),
+        flavor_profile: perfilSabor.trim(),
         temp_agua: tempAgua ? parseFloat(tempAgua) : null,
-        cafe_in: metodo === 'Espresso' ? parseFloat(cafeIn) : null,
-        cafe_out: metodo === 'Espresso' ? parseFloat(cafeOut) : null,
+        water_temp: tempAgua ? parseFloat(tempAgua) : null,
+        cafe_in: metodo === 'Espresso' ? (parseFloat(cafeIn) || null) : null,
+        dose_in: metodo === 'Espresso' ? (parseFloat(cafeIn) || null) : null,
+        cafe_out: metodo === 'Espresso' ? (parseFloat(cafeOut) || null) : null,
+        yield_out: metodo === 'Espresso' ? (parseFloat(cafeOut) || null) : null,
         grado: gradoToSave,
         comentario: comentario.trim(),
         fecha: new Date().toLocaleDateString('es-ES')
-      });
+      };
+
+      const response = await onSave(grindPayload);
+
+      // Verificación estricta de respuesta: solo mostrar éxito si success es explícitamente true
+      const isSuccess = response && (response.success === true || (response.data && response.data.success === true));
+      if (!isSuccess) {
+        const errorDetail = (response && (response.message || (response.data && response.data.message))) 
+          || 'Error al registrar la molienda en Google Sheets.';
+        throw new Error(errorDetail);
+      }
 
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 2500);
@@ -253,6 +303,10 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
       setNombreCafe('');
       setPerfilSabor('');
       setComentario('');
+    } catch (err) {
+      console.error('Error al guardar molienda:', err);
+      setErrorMsg(err.message || 'Error al guardar la molienda');
+      setTimeout(() => setErrorMsg(''), 6000);
     } finally {
       setSubmitting(false);
     }
@@ -294,6 +348,13 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
         </p>
       </div>
 
+      {errorMsg && (
+        <div className="p-4 rounded-3xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 flex items-center gap-3 text-red-800 dark:text-red-200 text-sm animate-in zoom-in-95">
+          <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-500" />
+          <span className="font-bold">{errorMsg}</span>
+        </div>
+      )}
+
       {showSuccess && (
         <div className="p-4 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 flex items-center gap-3 text-emerald-800 dark:text-emerald-200 text-sm animate-in zoom-in-95">
           <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-500" />
@@ -318,16 +379,23 @@ export const NewGrindScreen = ({ mills = [], onSave, onNavigateMills }) => {
 
           <div className="relative">
             <select
-              value={selectedMillId}
+              value={activeMillId}
               onChange={(e) => setSelectedMillId(e.target.value)}
               required
               className="w-full px-4 py-3 rounded-2xl bg-coffee-50/50 dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-terracotta/40 focus:border-terracotta transition-all appearance-none cursor-pointer"
             >
-              {mills.map((m) => (
-                <option key={m.id} value={m.id} className="dark:bg-darkbg-card">
-                  {m.nombre} ({m.tipo === 'dial' ? `Dial 1-${m.total_numeros}` : `${m.total_clicks} Clicks`})
-                </option>
-              ))}
+              {validMills.map((m) => {
+                const isDial = String(m.tipo || m.type || '').toLowerCase() === 'dial';
+                const count = isDial
+                  ? (m.total_numeros || m.total_dial_numbers || 11)
+                  : (m.total_clicks || 40);
+                const label = isDial ? `Dial 1-${count}` : `${count} Clicks`;
+                return (
+                  <option key={m.id} value={m.id} className="dark:bg-darkbg-card">
+                    {m.nombre} ({label})
+                  </option>
+                );
+              })}
             </select>
             <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-coffee-400">
               ▼

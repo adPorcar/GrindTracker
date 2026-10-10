@@ -37,6 +37,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // Bypass cache for non-http(s) requests (e.g. chrome-extension://)
+  if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
   // Bypass cache for external APIs (Google Apps Script) and non-GET requests
   if (event.request.method !== 'GET' || url.hostname.includes('script.google.com') || url.hostname.includes('script.googleusercontent.com')) {
     return;
@@ -59,9 +64,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
+          if (networkResponse && networkResponse.status === 200 && url.protocol.startsWith('http')) {
             const copy = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy).catch(() => {}));
           }
           return networkResponse;
         })
@@ -77,10 +82,10 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
       return fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic' && url.protocol.startsWith('http')) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
+            cache.put(event.request, responseToCache).catch(() => {});
           });
         }
         return networkResponse;

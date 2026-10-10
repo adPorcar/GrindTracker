@@ -53,13 +53,16 @@ export const serializeGrinder = (grinderData = {}) => {
 /**
  * Parses and maps a grinder response from Apps Script or cache to ensure full dual compatibility
  */
-export const parseGrinder = (item) => {
+export const parseGrinder = (item, index = 0) => {
   if (!item) return item;
   const rawType = String(item.type || item.tipo || 'Clicks').trim();
   const isDial = rawType.toLowerCase() === 'dial';
   const type = isDial ? 'Dial' : 'Clicks';
 
-  const name = String(item.name || item.nombre || '');
+  const name = String(item.name || item.nombre || '').trim();
+  const rawId = String(item.id || item.ID || '').trim();
+  const id = rawId || (name ? `mill_${encodeURIComponent(name).toLowerCase()}` : `mill_${index}_${Date.now()}`);
+
   const totalClicks = (!isDial && item.total_clicks != null && item.total_clicks !== '' && !isNaN(item.total_clicks))
     ? Number(item.total_clicks)
     : null;
@@ -74,9 +77,9 @@ export const parseGrinder = (item) => {
   const createdAt = String(item.created_at || item.fecha_creacion || '');
 
   return {
-    id: String(item.id || ''),
-    name,
-    nombre: name,
+    id,
+    name: name || 'Molino',
+    nombre: name || 'Molino',
     type,
     tipo: type.toLowerCase(),
     total_clicks: totalClicks,
@@ -94,9 +97,9 @@ export const parseGrinder = (item) => {
  * Schema: id | molino | coffee_name | roaster | metodo | variedad | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | grado | comentario | fecha
  */
 export const serializeGrind = (grindData = {}) => {
-  const coffeeName = sanitize(grindData.coffee_name || grindData.nombre_cafe || '');
-  const roaster = sanitize(grindData.roaster || grindData.tostadero || '');
-  const flavorProfile = sanitize(grindData.flavor_profile || grindData.perfil_sabor || '');
+  const coffeeName = sanitize(grindData.coffee_name ?? grindData.nombre_cafe ?? '');
+  const roaster = sanitize(grindData.roaster ?? grindData.tostadero ?? '');
+  const flavorProfile = sanitize(grindData.flavor_profile ?? grindData.perfil_sabor ?? '');
   
   const rawWaterTemp = grindData.water_temp ?? grindData.temp_agua;
   const waterTemp = (rawWaterTemp !== null && rawWaterTemp !== undefined && rawWaterTemp !== '' && !isNaN(rawWaterTemp))
@@ -113,19 +116,24 @@ export const serializeGrind = (grindData = {}) => {
     ? Number(rawYieldOut)
     : null;
 
+  const rawGrado = grindData.grado ?? grindData.grind_size;
+  const grado = (rawGrado !== undefined && rawGrado !== null && rawGrado !== '')
+    ? (isNaN(rawGrado) ? String(rawGrado) : Number(rawGrado))
+    : 0;
+
   const fecha = grindData.fecha || new Date().toLocaleDateString('es-ES');
 
   return {
-    id: grindData.id,
-    molino: sanitize(grindData.molino || ''),
+    id: grindData.id || ('grind_' + Date.now()),
+    molino: sanitize(grindData.molino ?? grindData.grinder ?? grindData.name ?? ''),
     coffee_name: coffeeName,
     nombre_cafe: coffeeName,
     roaster: roaster,
     tostadero: roaster,
-    metodo: sanitize(grindData.metodo || 'Espresso'),
-    variedad: sanitize(grindData.variedad || ''),
-    proceso: sanitize(grindData.proceso || ''),
-    pais: sanitize(grindData.pais || ''),
+    metodo: sanitize(grindData.metodo ?? grindData.method ?? 'Espresso'),
+    variedad: sanitize(grindData.variedad ?? grindData.variety ?? ''),
+    proceso: sanitize(grindData.proceso ?? grindData.process ?? ''),
+    pais: sanitize(grindData.pais ?? grindData.country ?? ''),
     flavor_profile: flavorProfile,
     perfil_sabor: flavorProfile,
     water_temp: waterTemp,
@@ -134,8 +142,8 @@ export const serializeGrind = (grindData = {}) => {
     cafe_in: doseIn,
     yield_out: yieldOut,
     cafe_out: yieldOut,
-    grado: grindData.grado !== undefined ? grindData.grado : 0,
-    comentario: sanitize(grindData.comentario || ''),
+    grado: grado,
+    comentario: sanitize(grindData.comentario ?? grindData.comment ?? grindData.comments ?? ''),
     fecha
   };
 };
@@ -164,9 +172,14 @@ export const parseGrind = (item) => {
     ? Number(rawYieldOut)
     : null;
 
+  const rawGrado = item.grado ?? item.grind_size;
+  const grado = (rawGrado !== undefined && rawGrado !== null && rawGrado !== '')
+    ? (isNaN(rawGrado) ? String(rawGrado) : Number(rawGrado))
+    : 0;
+
   return {
     id: String(item.id || ''),
-    molino: String(item.molino || ''),
+    molino: String(item.molino || item.grinder || item.name || ''),
     coffee_name: coffeeName,
     nombre_cafe: coffeeName,
     roaster: roaster,
@@ -183,7 +196,7 @@ export const parseGrind = (item) => {
     cafe_in: doseIn,
     yield_out: yieldOut,
     cafe_out: yieldOut,
-    grado: item.grado !== undefined ? item.grado : 0,
+    grado: grado,
     comentario: String(item.comentario || ''),
     fecha: String(item.fecha || '')
   };

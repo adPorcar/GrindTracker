@@ -212,7 +212,10 @@ export const EditGrindModal = ({
         fecha: grind.fecha
       };
 
-      await onSave(payload);
+      const res = await onSave(payload);
+      if (res && res.success === false) {
+        throw new Error(res.message || 'Error al actualizar la molienda.');
+      }
       onClose();
     } catch (err) {
       setErrorMsg(err.message || 'Error al actualizar la molienda');

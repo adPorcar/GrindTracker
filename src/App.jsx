@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './context/AuthContext';
-import { api } from './services/api';
+import { api, parseGrinder } from './services/api';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { AuthScreen } from './screens/AuthScreen';
@@ -31,7 +31,10 @@ export function App() {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try {
-        setMills(JSON.parse(cached));
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          setMills(parsed.map((m, idx) => parseGrinder(m, idx)));
+        }
       } catch (e) {
         console.warn('Error parsing cached mills:', e);
       }
@@ -95,45 +98,68 @@ export function App() {
 
   // Handler: Add new grind
   const handleAddGrind = async (newGrindData) => {
-    if (!user) return;
-    const res = await api.addGrind(user.user_sheet_id, newGrindData, user.username, sessionToken);
-    if (res.unauthorized) {
-      logout();
-      return;
+    if (!user) {
+      return { success: false, message: 'Usuario no autenticado' };
     }
-    if (res.success && res.grind) {
-      setGrinds((prev) => [res.grind, ...prev]);
-      setTimeout(() => {
-        setActiveTab('grinds');
-      }, 900);
+    try {
+      const res = await api.addGrind(user.user_sheet_id, newGrindData, user.username, sessionToken);
+      if (res?.unauthorized) {
+        logout();
+        return res;
+      }
+      if (res?.success && res?.grind) {
+        setGrinds((prev) => [res.grind, ...prev]);
+        setTimeout(() => {
+          setActiveTab('grinds');
+        }, 900);
+      }
+      return res;
+    } catch (err) {
+      console.error('[Grind Tracker] Error en handleAddGrind:', err);
+      return {
+        success: false,
+        message: err.message || 'Error de conexión con Google Apps Script.'
+      };
     }
   };
 
   // Handler: Update grind
   const handleUpdateGrind = async (updatedData) => {
-    if (!user) return;
-    const res = await api.updateGrind(user.user_sheet_id, updatedData, user.username, sessionToken);
-    if (res.unauthorized) {
-      logout();
-      return;
-    }
-    if (res.success) {
-      setGrinds((prev) =>
-        prev.map((g) => (String(g.id) === String(updatedData.id) ? { ...g, ...updatedData } : g))
-      );
+    if (!user) return { success: false, message: 'Usuario no autenticado' };
+    try {
+      const res = await api.updateGrind(user.user_sheet_id, updatedData, user.username, sessionToken);
+      if (res?.unauthorized) {
+        logout();
+        return res;
+      }
+      if (res?.success) {
+        setGrinds((prev) =>
+          prev.map((g) => (String(g.id) === String(updatedData.id) ? { ...g, ...updatedData } : g))
+        );
+      }
+      return res;
+    } catch (err) {
+      console.error('[Grind Tracker] Error en handleUpdateGrind:', err);
+      return { success: false, message: err.message };
     }
   };
 
   // Handler: Delete grind
   const handleDeleteGrind = async (id) => {
-    if (!user) return;
-    const res = await api.deleteGrind(user.user_sheet_id, id, user.username, sessionToken);
-    if (res.unauthorized) {
-      logout();
-      return;
-    }
-    if (res.success) {
-      setGrinds((prev) => prev.filter((g) => String(g.id) !== String(id)));
+    if (!user) return { success: false, message: 'Usuario no autenticado' };
+    try {
+      const res = await api.deleteGrind(user.user_sheet_id, id, user.username, sessionToken);
+      if (res?.unauthorized) {
+        logout();
+        return res;
+      }
+      if (res?.success) {
+        setGrinds((prev) => prev.filter((g) => String(g.id) !== String(id)));
+      }
+      return res;
+    } catch (err) {
+      console.error('[Grind Tracker] Error en handleDeleteGrind:', err);
+      return { success: false, message: err.message };
     }
   };
 

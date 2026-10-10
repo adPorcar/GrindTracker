@@ -115,6 +115,8 @@ function doPost(e) {
       case "getGrinds":
         return handleGetGrinds(data);
       case "addGrind":
+      case "add_grind":
+      case "createGrind":
         return handleAddGrind(data);
       case "updateGrind":
         return handleUpdateGrind(data);
@@ -659,71 +661,132 @@ function handleGetGrinds(data) {
 }
 
 function handleAddGrind(data) {
-  var authSheetId = sanitizeInput(data.authSheetId);
-  var username = sanitizeInput(data.username);
-  var sessionToken = sanitizeInput(data.sessionToken);
-  var userSheetId = sanitizeInput(data.userSheetId);
-  var grind = data.grind;
+  try {
+    if (!data) {
+      return createJsonResponse({
+        success: false,
+        message: "No se recibieron datos para registrar la molienda."
+      });
+    }
 
-  var session = validateSession(authSheetId, username, sessionToken, userSheetId);
-  if (!session.valid) {
-    return createJsonResponse({ success: false, unauthorized: session.unauthorized, message: session.message });
-  }
+    // Extracción segura de datos con fallback si están encapsulados en 'grind' o a primer nivel
+    var g = (data && data.grind && typeof data.grind === "object") ? data.grind : (data || {});
 
-  if (!grind) {
-    return createJsonResponse({ success: false, message: "Datos de molienda incompletos." });
-  }
+    var authSheetId = sanitizeInput(data.authSheetId || g.authSheetId);
+    var username = sanitizeInput(data.username || g.username);
+    var sessionToken = sanitizeInput(data.sessionToken || g.sessionToken);
+    var userSheetId = sanitizeInput(data.userSheetId || g.userSheetId);
 
-  var ss = SpreadsheetApp.openById(userSheetId);
-  var sheet = getOrCreateMoliendasSheet(ss);
+    // Validar sesión del usuario
+    var session = validateSession(authSheetId, username, sessionToken, userSheetId);
+    if (!session.valid) {
+      return createJsonResponse({
+        success: false,
+        unauthorized: session.unauthorized || false,
+        message: session.message || "Sesión no válida o no autorizada."
+      });
+    }
 
-  var id = grind.id || ("grind_" + new Date().getTime());
-  var fecha = grind.fecha || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy");
+    if (!userSheetId) {
+      return createJsonResponse({
+        success: false,
+        message: "ID de hoja de cálculo de usuario (userSheetId) no proporcionado."
+      });
+    }
 
-  var coffeeName = sanitizeInput(grind.coffee_name || grind.coffeeName || grind.nombre_cafe || grind.nombre || "");
-  var roaster = sanitizeInput(grind.roaster || grind.tostadero || "");
-  var flavorProfile = sanitizeInput(grind.flavor_profile || grind.flavorProfile || grind.perfil_sabor || "");
-  var rawWaterTemp = grind.water_temp !== undefined ? grind.water_temp : (grind.waterTemp !== undefined ? grind.waterTemp : grind.temp_agua);
-  var waterTemp = (rawWaterTemp !== null && rawWaterTemp !== undefined && rawWaterTemp !== "") ? parseFloat(rawWaterTemp) : "";
-  var rawDoseIn = grind.dose_in !== undefined ? grind.dose_in : (grind.doseIn !== undefined ? grind.doseIn : grind.cafe_in);
-  var doseIn = (rawDoseIn !== null && rawDoseIn !== undefined && rawDoseIn !== "") ? parseFloat(rawDoseIn) : "";
-  var rawYieldOut = grind.yield_out !== undefined ? grind.yield_out : (grind.yieldOut !== undefined ? grind.yieldOut : grind.cafe_out);
-  var yieldOut = (rawYieldOut !== null && rawYieldOut !== undefined && rawYieldOut !== "") ? parseFloat(rawYieldOut) : "";
-  var grado = grind.grado !== undefined && grind.grado !== null ? grind.grado : (grind.grind_size !== undefined ? grind.grind_size : 0);
+    var ss = SpreadsheetApp.openById(userSheetId);
+    if (!ss) {
+      return createJsonResponse({
+        success: false,
+        message: "No se pudo acceder a la hoja de cálculo con ID: " + userSheetId
+      });
+    }
 
-  var newRow = [
-    id,
-    sanitizeInput(grind.molino),
-    coffeeName,
-    roaster,
-    sanitizeInput(grind.metodo),
-    sanitizeInput(grind.variedad || ""),
-    sanitizeInput(grind.proceso || ""),
-    sanitizeInput(grind.pais),
-    flavorProfile,
-    waterTemp,
-    doseIn,
-    yieldOut,
-    grado,
-    sanitizeInput(grind.comentario || ""),
-    fecha
-  ];
+    var sheet = getOrCreateMoliendasSheet(ss);
+    if (!sheet) {
+      return createJsonResponse({
+        success: false,
+        message: "No se pudo obtener o inicializar la pestaña 'moliendas'."
+      });
+    }
 
-  sheet.appendRow(newRow);
+    var id = String(g.id || ("grind_" + new Date().getTime()));
+    var fecha = String(g.fecha || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy"));
 
-  return createJsonResponse({
-    success: true,
-    grind: {
+    var molino = sanitizeInput(g.molino !== undefined ? g.molino : (g.grinder !== undefined ? g.grinder : (g.name !== undefined ? g.name : "")));
+    var coffeeName = sanitizeInput(
+      g.coffee_name !== undefined ? g.coffee_name :
+      (g.coffeeName !== undefined ? g.coffeeName :
+      (g.nombre_cafe !== undefined ? g.nombre_cafe :
+      (g.nombre !== undefined ? g.nombre : "")))
+    );
+    var roaster = sanitizeInput(g.roaster !== undefined ? g.roaster : (g.tostadero !== undefined ? g.tostadero : ""));
+    var metodo = sanitizeInput(g.metodo !== undefined ? g.metodo : (g.method !== undefined ? g.method : "Espresso"));
+    var variedad = sanitizeInput(g.variedad !== undefined ? g.variedad : (g.variety !== undefined ? g.variety : ""));
+    var proceso = sanitizeInput(g.proceso !== undefined ? g.proceso : (g.process !== undefined ? g.process : ""));
+    var pais = sanitizeInput(g.pais !== undefined ? g.pais : (g.country !== undefined ? g.country : ""));
+    var flavorProfile = sanitizeInput(
+      g.flavor_profile !== undefined ? g.flavor_profile :
+      (g.flavorProfile !== undefined ? g.flavorProfile :
+      (g.perfil_sabor !== undefined ? g.perfil_sabor : ""))
+    );
+
+    var rawWaterTemp = g.water_temp !== undefined ? g.water_temp : (g.waterTemp !== undefined ? g.waterTemp : g.temp_agua);
+    var waterTemp = (rawWaterTemp !== null && rawWaterTemp !== undefined && rawWaterTemp !== "" && !isNaN(rawWaterTemp))
+      ? parseFloat(rawWaterTemp)
+      : "";
+
+    var rawDoseIn = g.dose_in !== undefined ? g.dose_in : (g.doseIn !== undefined ? g.doseIn : g.cafe_in);
+    var doseIn = (rawDoseIn !== null && rawDoseIn !== undefined && rawDoseIn !== "" && !isNaN(rawDoseIn))
+      ? parseFloat(rawDoseIn)
+      : "";
+
+    var rawYieldOut = g.yield_out !== undefined ? g.yield_out : (g.yieldOut !== undefined ? g.yieldOut : g.cafe_out);
+    var yieldOut = (rawYieldOut !== null && rawYieldOut !== undefined && rawYieldOut !== "" && !isNaN(rawYieldOut))
+      ? parseFloat(rawYieldOut)
+      : "";
+
+    var rawGrado = g.grado !== undefined ? g.grado : g.grind_size;
+    var grado = (rawGrado !== undefined && rawGrado !== null && rawGrado !== "")
+      ? (isNaN(rawGrado) ? sanitizeInput(rawGrado) : parseFloat(rawGrado))
+      : 0;
+
+    var comentario = sanitizeInput(g.comentario !== undefined ? g.comentario : (g.comment !== undefined ? g.comment : (g.comments !== undefined ? g.comments : "")));
+
+    // Orden estándar exacto de GRIND_HEADERS:
+    // id | molino | coffee_name | roaster | metodo | variedad | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | grado | comentario | fecha
+    var newRow = [
+      id,
+      molino,
+      coffeeName,
+      roaster,
+      metodo,
+      variedad,
+      proceso,
+      pais,
+      flavorProfile,
+      waterTemp,
+      doseIn,
+      yieldOut,
+      grado,
+      comentario,
+      fecha
+    ];
+
+    sheet.appendRow(newRow);
+    SpreadsheetApp.flush(); // Forzar sincronización física inmediata en disco de Google Drive
+
+    var savedGrind = {
       id: id,
-      molino: grind.molino,
+      molino: molino,
       coffee_name: coffeeName,
       nombre_cafe: coffeeName,
       roaster: roaster,
       tostadero: roaster,
-      metodo: grind.metodo,
-      variedad: grind.variedad || "",
-      proceso: grind.proceso || "",
-      pais: grind.pais,
+      metodo: metodo,
+      variedad: variedad,
+      proceso: proceso,
+      pais: pais,
       flavor_profile: flavorProfile,
       perfil_sabor: flavorProfile,
       water_temp: waterTemp !== "" ? waterTemp : null,
@@ -733,10 +796,21 @@ function handleAddGrind(data) {
       yield_out: yieldOut !== "" ? yieldOut : null,
       cafe_out: yieldOut !== "" ? yieldOut : null,
       grado: grado,
-      comentario: grind.comentario || "",
+      comentario: comentario,
       fecha: fecha
-    }
-  });
+    };
+
+    return createJsonResponse({
+      success: true,
+      message: "Molienda guardada correctamente.",
+      grind: savedGrind
+    });
+  } catch (error) {
+    return createJsonResponse({
+      success: false,
+      message: "Error al registrar la molienda en Google Sheets: " + error.toString()
+    });
+  }
 }
 
 function handleUpdateGrind(data) {
@@ -819,6 +893,7 @@ function handleUpdateGrind(data) {
 
       // Single atomic range update for the whole row (prevents partial writes and lag)
       sheet.getRange(rowNumber, 1, 1, GRIND_HEADERS.length).setValues([updatedRow]);
+      SpreadsheetApp.flush();
 
       var returnedGrind = {
         id: String(values[i][0]),
@@ -874,6 +949,7 @@ function handleDeleteGrind(data) {
   for (var i = 1; i < values.length; i++) {
     if (String(values[i][0]) === String(id)) {
       sheet.deleteRow(i + 1);
+      SpreadsheetApp.flush();
       return createJsonResponse({ success: true, message: "Molienda eliminada correctamente." });
     }
   }
