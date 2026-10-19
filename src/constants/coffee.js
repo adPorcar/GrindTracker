@@ -69,6 +69,9 @@ export const COFFEE_METHODS = [
   { id: 'Cold Brew', es: 'Cold Brew', en: 'Cold Brew' }
 ];
 
+export const COFFEE_PROCESSES = USUAL_PROCESSES.map(p => p.es);
+export const COFFEE_VARIETIES = USUAL_VARIETIES.map(v => v.es);
+
 export const POPULAR_COUNTRIES = [
   'Colombia',
   'Etiopía',

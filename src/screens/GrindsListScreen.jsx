@@ -245,9 +245,8 @@ export const GrindsListScreen = ({
             >
               {t('allOption')}
             </button>
-            {COFFEE_METHODS.map((method) => {
+            {uniqueMethods.map((method) => {
               const count = grinds.filter(g => g.metodo === method).length;
-              if (count === 0 && !uniqueMethods.includes(method)) return null;
               return (
                 <button
                   key={method}
@@ -281,9 +280,8 @@ export const GrindsListScreen = ({
             >
               {t('allOption')}
             </button>
-            {COFFEE_PROCESSES.map((proc) => {
+            {uniqueProcesses.map((proc) => {
               const count = grinds.filter(g => g.proceso === proc).length;
-              if (count === 0 && !uniqueProcesses.includes(proc)) return null;
               return (
                 <button
                   key={proc}
