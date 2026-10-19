@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from './Modal';
 import { CylindricalDialSelector } from './CylindricalDialSelector';
 import { useLanguage } from '../context/LanguageContext';
-import { Scale, Thermometer, Tag, MessageSquare, AlertCircle, Sliders, Mountain, Timer } from 'lucide-react';
+import { Scale, Thermometer, Tag, Coffee, MessageSquare, AlertCircle, Sliders, Mountain, Timer } from 'lucide-react';
 
 
 import {
