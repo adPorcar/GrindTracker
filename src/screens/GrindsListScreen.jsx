@@ -5,30 +5,11 @@ import { Modal } from '../components/Modal';
 import { EditGrindModal } from '../components/EditGrindModal';
 import { useLanguage } from '../context/LanguageContext';
 
-const COFFEE_METHODS = [
-  'Espresso',
-  'Mokka',
-  'Filtro',
-  'Aeropress',
-  'Prensa Francesa',
-  'Cold Brew'
-];
-
-const COFFEE_VARIETIES = [
-  'Arábica',
-  'Robusta',
-  'Libérica',
-  'Excelsa'
-];
-
-const COFFEE_PROCESSES = [
-  'Natural',
-  'Lavado',
-  'Honey',
-  'Anaeróbico',
-  'Maceración Carbónica',
-  'Koji'
-];
+import {
+  COFFEE_METHODS,
+  USUAL_VARIETIES,
+  USUAL_PROCESSES
+} from '../constants/coffee';
 
 export const GrindsListScreen = ({
   grinds = [],
@@ -89,6 +70,7 @@ export const GrindsListScreen = ({
         (item.pais && item.pais.toLowerCase().includes(q)) ||
         (item.metodo && item.metodo.toLowerCase().includes(q)) ||
         (item.variedad && item.variedad.toLowerCase().includes(q)) ||
+        (item.altitud && item.altitud.toLowerCase().includes(q)) ||
         (item.proceso && item.proceso.toLowerCase().includes(q)) ||
         (item.perfil_sabor && item.perfil_sabor.toLowerCase().includes(q)) ||
         (item.comentario && item.comentario.toLowerCase().includes(q));

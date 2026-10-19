@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings2, Globe, Calendar, Edit3, Trash2, Scale, Thermometer, Flame, Tag } from 'lucide-react';
+import { Settings2, Globe, Calendar, Edit3, Trash2, Scale, Thermometer, Flame, Tag, Mountain, Timer } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 const METHOD_STYLES = {
@@ -74,7 +74,7 @@ export const GrindCard = ({ grind, onEdit, onDelete }) => {
               {t('step')}
             </span>
             <span className="text-base font-black text-coffee-900 dark:text-coffee-100 font-mono">
-              {Number(grind.grado).toFixed(1)}
+              {Number(grind.grado % 1 !== 0 ? Number(grind.grado).toFixed(2) : Number(grind.grado).toFixed(1))}
             </span>
           </div>
         </div>
@@ -109,11 +109,24 @@ export const GrindCard = ({ grind, onEdit, onDelete }) => {
           <span className="truncate max-w-[130px]">{grind.molino}</span>
         </div>
 
-        {/* Espresso In/Out Ratio Pill */}
+        {/* Espresso In/Out Ratio & Extraction Time Pill */}
         {hasEspressoRatio && (
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200/60 dark:border-orange-800/40 text-orange-900 dark:text-orange-200 font-mono font-bold text-[11px]">
             <Scale className="w-3 h-3 text-orange-600" />
             <span>{grind.cafe_in}g → {grind.cafe_out}g (1:{ratioCalc})</span>
+            {grind.extraction_time && (
+              <span className="inline-flex items-center gap-0.5 text-orange-700 dark:text-orange-300">
+                • <Timer className="w-2.5 h-2.5 inline" /> {grind.extraction_time}s
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Altitude */}
+        {grind.altitud && (
+          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-coffee-50 dark:bg-darkbg-input/60 border border-coffee-200/50 dark:border-darkbg-border/50 text-coffee-700 dark:text-coffee-300 font-medium text-[11px]">
+            <Mountain className="w-3 h-3 text-terracotta" />
+            <span>{grind.altitud.endsWith('m') ? grind.altitud : `${grind.altitud}m`}</span>
           </div>
         )}
 

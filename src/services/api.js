@@ -94,7 +94,7 @@ export const parseGrinder = (item, index = 0) => {
 
 /**
  * Normalizes and serializes a grind payload before sending to Apps Script or saving to storage
- * Schema: id | molino | coffee_name | roaster | metodo | variedad | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | grado | comentario | fecha
+ * Schema: id | molino | coffee_name | roaster | metodo | variedad | altitud | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | extraction_time | grado | comentario | fecha
  */
 export const serializeGrind = (grindData = {}) => {
   const coffeeName = sanitize(grindData.coffee_name ?? grindData.nombre_cafe ?? '');
@@ -116,6 +116,11 @@ export const serializeGrind = (grindData = {}) => {
     ? Number(rawYieldOut)
     : null;
 
+  const rawExtractionTime = grindData.extraction_time ?? grindData.tiempo_extraccion;
+  const extractionTime = (rawExtractionTime !== null && rawExtractionTime !== undefined && rawExtractionTime !== '' && !isNaN(rawExtractionTime))
+    ? Number(rawExtractionTime)
+    : null;
+
   const rawGrado = grindData.grado ?? grindData.grind_size;
   const grado = (rawGrado !== undefined && rawGrado !== null && rawGrado !== '')
     ? (isNaN(rawGrado) ? String(rawGrado) : Number(rawGrado))
@@ -132,6 +137,8 @@ export const serializeGrind = (grindData = {}) => {
     tostadero: roaster,
     metodo: sanitize(grindData.metodo ?? grindData.method ?? 'Espresso'),
     variedad: sanitize(grindData.variedad ?? grindData.variety ?? ''),
+    altitud: sanitize(grindData.altitud ?? grindData.altitude ?? ''),
+    altitude: sanitize(grindData.altitud ?? grindData.altitude ?? ''),
     proceso: sanitize(grindData.proceso ?? grindData.process ?? ''),
     pais: sanitize(grindData.pais ?? grindData.country ?? ''),
     flavor_profile: flavorProfile,
@@ -142,6 +149,8 @@ export const serializeGrind = (grindData = {}) => {
     cafe_in: doseIn,
     yield_out: yieldOut,
     cafe_out: yieldOut,
+    extraction_time: extractionTime,
+    tiempo_extraccion: extractionTime,
     grado: grado,
     comentario: sanitize(grindData.comentario ?? grindData.comment ?? grindData.comments ?? ''),
     fecha
@@ -172,6 +181,11 @@ export const parseGrind = (item) => {
     ? Number(rawYieldOut)
     : null;
 
+  const rawExtractionTime = item.extraction_time ?? item.tiempo_extraccion;
+  const extractionTime = (rawExtractionTime !== null && rawExtractionTime !== undefined && rawExtractionTime !== '' && !isNaN(rawExtractionTime))
+    ? Number(rawExtractionTime)
+    : null;
+
   const rawGrado = item.grado ?? item.grind_size;
   const grado = (rawGrado !== undefined && rawGrado !== null && rawGrado !== '')
     ? (isNaN(rawGrado) ? String(rawGrado) : Number(rawGrado))
@@ -186,6 +200,8 @@ export const parseGrind = (item) => {
     tostadero: roaster,
     metodo: String(item.metodo || 'Espresso'),
     variedad: String(item.variedad || ''),
+    altitud: String(item.altitud || item.altitude || ''),
+    altitude: String(item.altitud || item.altitude || ''),
     proceso: String(item.proceso || ''),
     pais: String(item.pais || ''),
     flavor_profile: flavorProfile,
@@ -196,6 +212,8 @@ export const parseGrind = (item) => {
     cafe_in: doseIn,
     yield_out: yieldOut,
     cafe_out: yieldOut,
+    extraction_time: extractionTime,
+    tiempo_extraccion: extractionTime,
     grado: grado,
     comentario: String(item.comentario || ''),
     fecha: String(item.fecha || '')

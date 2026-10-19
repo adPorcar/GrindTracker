@@ -48,12 +48,14 @@ var GRIND_HEADERS = [
   "roaster",
   "metodo",
   "variedad",
+  "altitud",
   "proceso",
   "pais",
   "flavor_profile",
   "water_temp",
   "dose_in",
   "yield_out",
+  "extraction_time",
   "grado",
   "comentario",
   "fecha"
@@ -619,28 +621,70 @@ function handleGetGrinds(data) {
 
   var grinds = [];
   if (values.length > 1) {
+    // Dynamic column index map from header row (resilient to schema migrations)
+    var headerMap = {};
+    for (var c = 0; c < values[0].length; c++) {
+      headerMap[String(values[0][c]).trim().toLowerCase()] = c;
+    }
+
+    function getCell(row, name, fallbackIdx) {
+      var low = name.toLowerCase();
+      if (headerMap.hasOwnProperty(low)) {
+        var idx = headerMap[low];
+        return (idx >= 0 && idx < row.length) ? row[idx] : "";
+      }
+      return (fallbackIdx !== undefined && fallbackIdx < row.length) ? row[fallbackIdx] : "";
+    }
+
     for (var i = values.length - 1; i >= 1; i--) {
       var row = values[i];
       if (row[0]) {
-        var coffeeName = String(row[2] || "");
-        var roaster = String(row[3] || "");
-        var flavorProfile = String(row[8] || "");
-        var waterTemp = (row[9] !== "" && row[9] !== null && !isNaN(row[9])) ? parseFloat(row[9]) : null;
-        var doseIn = (row[10] !== "" && row[10] !== null && !isNaN(row[10])) ? parseFloat(row[10]) : null;
-        var yieldOut = (row[11] !== "" && row[11] !== null && !isNaN(row[11])) ? parseFloat(row[11]) : null;
-        var gradoVal = (row[12] !== "" && row[12] !== null) ? (isNaN(row[12]) ? String(row[12]) : parseFloat(row[12])) : 0;
+        var id = String(getCell(row, "id", 0));
+        var molino = String(getCell(row, "molino", 1) || "");
+        var coffeeName = String(getCell(row, "coffee_name", 2) || getCell(row, "nombre_cafe", 2) || "");
+        var roaster = String(getCell(row, "roaster", 3) || getCell(row, "tostadero", 3) || "");
+        var metodo = String(getCell(row, "metodo", 4) || "");
+        var variedad = String(getCell(row, "variedad", 5) || "");
+        var altitud = String(getCell(row, "altitud", 6) || getCell(row, "altitude", 6) || "");
+        var proceso = String(getCell(row, "proceso", 7) || "");
+        var pais = String(getCell(row, "pais", 8) || "");
+        var flavorProfile = String(getCell(row, "flavor_profile", 9) || getCell(row, "perfil_sabor", 9) || "");
+
+        var rawWaterTemp = getCell(row, "water_temp", 10);
+        if (rawWaterTemp === "") rawWaterTemp = getCell(row, "temp_agua", 10);
+        var waterTemp = (rawWaterTemp !== "" && rawWaterTemp !== null && !isNaN(rawWaterTemp)) ? parseFloat(rawWaterTemp) : null;
+
+        var rawDoseIn = getCell(row, "dose_in", 11);
+        if (rawDoseIn === "") rawDoseIn = getCell(row, "cafe_in", 11);
+        var doseIn = (rawDoseIn !== "" && rawDoseIn !== null && !isNaN(rawDoseIn)) ? parseFloat(rawDoseIn) : null;
+
+        var rawYieldOut = getCell(row, "yield_out", 12);
+        if (rawYieldOut === "") rawYieldOut = getCell(row, "cafe_out", 12);
+        var yieldOut = (rawYieldOut !== "" && rawYieldOut !== null && !isNaN(rawYieldOut)) ? parseFloat(rawYieldOut) : null;
+
+        var rawExtractionTime = getCell(row, "extraction_time", 13);
+        if (rawExtractionTime === "") rawExtractionTime = getCell(row, "tiempo_extraccion", 13);
+        var extractionTime = (rawExtractionTime !== "" && rawExtractionTime !== null && !isNaN(rawExtractionTime)) ? parseFloat(rawExtractionTime) : null;
+
+        var rawGrado = getCell(row, "grado", 14);
+        var gradoVal = (rawGrado !== "" && rawGrado !== null) ? (isNaN(rawGrado) ? String(rawGrado) : parseFloat(rawGrado)) : 0;
+
+        var comentario = String(getCell(row, "comentario", 15) || "");
+        var fecha = String(getCell(row, "fecha", 16) || "");
 
         grinds.push({
-          id: String(row[0]),
-          molino: String(row[1] || ""),
+          id: id,
+          molino: molino,
           coffee_name: coffeeName,
           nombre_cafe: coffeeName,
           roaster: roaster,
           tostadero: roaster,
-          metodo: String(row[4] || ""),
-          variedad: String(row[5] || ""),
-          proceso: String(row[6] || ""),
-          pais: String(row[7] || ""),
+          metodo: metodo,
+          variedad: variedad,
+          altitud: altitud,
+          altitude: altitud,
+          proceso: proceso,
+          pais: pais,
           flavor_profile: flavorProfile,
           perfil_sabor: flavorProfile,
           water_temp: waterTemp,
@@ -649,9 +693,11 @@ function handleGetGrinds(data) {
           cafe_in: doseIn,
           yield_out: yieldOut,
           cafe_out: yieldOut,
+          extraction_time: extractionTime,
+          tiempo_extraccion: extractionTime,
           grado: gradoVal,
-          comentario: String(row[13] || ""),
-          fecha: String(row[14] || "")
+          comentario: comentario,
+          fecha: fecha
         });
       }
     }
@@ -723,6 +769,7 @@ function handleAddGrind(data) {
     var roaster = sanitizeInput(g.roaster !== undefined ? g.roaster : (g.tostadero !== undefined ? g.tostadero : ""));
     var metodo = sanitizeInput(g.metodo !== undefined ? g.metodo : (g.method !== undefined ? g.method : "Espresso"));
     var variedad = sanitizeInput(g.variedad !== undefined ? g.variedad : (g.variety !== undefined ? g.variety : ""));
+    var altitud = sanitizeInput(g.altitud !== undefined ? g.altitud : (g.altitude !== undefined ? g.altitude : ""));
     var proceso = sanitizeInput(g.proceso !== undefined ? g.proceso : (g.process !== undefined ? g.process : ""));
     var pais = sanitizeInput(g.pais !== undefined ? g.pais : (g.country !== undefined ? g.country : ""));
     var flavorProfile = sanitizeInput(
@@ -746,6 +793,11 @@ function handleAddGrind(data) {
       ? parseFloat(rawYieldOut)
       : "";
 
+    var rawExtractionTime = g.extraction_time !== undefined ? g.extraction_time : (g.extractionTime !== undefined ? g.extractionTime : g.tiempo_extraccion);
+    var extractionTime = (rawExtractionTime !== null && rawExtractionTime !== undefined && rawExtractionTime !== "" && !isNaN(rawExtractionTime))
+      ? parseFloat(rawExtractionTime)
+      : "";
+
     var rawGrado = g.grado !== undefined ? g.grado : g.grind_size;
     var grado = (rawGrado !== undefined && rawGrado !== null && rawGrado !== "")
       ? (isNaN(rawGrado) ? sanitizeInput(rawGrado) : parseFloat(rawGrado))
@@ -754,7 +806,7 @@ function handleAddGrind(data) {
     var comentario = sanitizeInput(g.comentario !== undefined ? g.comentario : (g.comment !== undefined ? g.comment : (g.comments !== undefined ? g.comments : "")));
 
     // Orden estándar exacto de GRIND_HEADERS:
-    // id | molino | coffee_name | roaster | metodo | variedad | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | grado | comentario | fecha
+    // id | molino | coffee_name | roaster | metodo | variedad | altitud | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | extraction_time | grado | comentario | fecha
     var newRow = [
       id,
       molino,
@@ -762,12 +814,14 @@ function handleAddGrind(data) {
       roaster,
       metodo,
       variedad,
+      altitud,
       proceso,
       pais,
       flavorProfile,
       waterTemp,
       doseIn,
       yieldOut,
+      extractionTime,
       grado,
       comentario,
       fecha
@@ -785,6 +839,8 @@ function handleAddGrind(data) {
       tostadero: roaster,
       metodo: metodo,
       variedad: variedad,
+      altitud: altitud,
+      altitude: altitud,
       proceso: proceso,
       pais: pais,
       flavor_profile: flavorProfile,
@@ -795,6 +851,8 @@ function handleAddGrind(data) {
       cafe_in: doseIn !== "" ? doseIn : null,
       yield_out: yieldOut !== "" ? yieldOut : null,
       cafe_out: yieldOut !== "" ? yieldOut : null,
+      extraction_time: extractionTime !== "" ? extractionTime : null,
+      tiempo_extraccion: extractionTime !== "" ? extractionTime : null,
       grado: grado,
       comentario: comentario,
       fecha: fecha
@@ -851,27 +909,31 @@ function handleUpdateGrind(data) {
         (grind.tostadero !== undefined ? grind.tostadero : values[i][3])
       );
       var metodo = sanitizeInput(grind.metodo !== undefined ? grind.metodo : (grind.method !== undefined ? grind.method : values[i][4]));
-      var variedad = sanitizeInput(grind.variedad !== undefined ? grind.variedad : (grind.variety !== undefined ? grind.variety : values[i][5]));
-      var proceso = sanitizeInput(grind.proceso !== undefined ? grind.proceso : (grind.process !== undefined ? grind.process : values[i][6]));
-      var pais = sanitizeInput(grind.pais !== undefined ? grind.pais : (grind.country !== undefined ? grind.country : values[i][7]));
+      var variedad = sanitizeInput(grind.variedad !== undefined ? grind.variedad : (grind.variety !== undefined ? grind.variety : (values[i][5] || "")));
+      var altitud = sanitizeInput(grind.altitud !== undefined ? grind.altitud : (grind.altitude !== undefined ? grind.altitude : (values[i][6] !== undefined ? values[i][6] : "")));
+      var proceso = sanitizeInput(grind.proceso !== undefined ? grind.proceso : (grind.process !== undefined ? grind.process : (values[i][7] !== undefined ? values[i][7] : values[i][6])));
+      var pais = sanitizeInput(grind.pais !== undefined ? grind.pais : (grind.country !== undefined ? grind.country : (values[i][8] !== undefined ? values[i][8] : values[i][7])));
       var flavorProfile = sanitizeInput(
         grind.flavor_profile !== undefined ? grind.flavor_profile :
         (grind.flavorProfile !== undefined ? grind.flavorProfile :
-        (grind.perfil_sabor !== undefined ? grind.perfil_sabor : values[i][8]))
+        (grind.perfil_sabor !== undefined ? grind.perfil_sabor : (values[i][9] !== undefined ? values[i][9] : values[i][8])))
       );
 
       var rawWaterTemp = grind.water_temp !== undefined ? grind.water_temp : (grind.waterTemp !== undefined ? grind.waterTemp : grind.temp_agua);
-      var waterTemp = (rawWaterTemp !== undefined && rawWaterTemp !== null && rawWaterTemp !== "") ? parseFloat(rawWaterTemp) : values[i][9];
+      var waterTemp = (rawWaterTemp !== undefined && rawWaterTemp !== null && rawWaterTemp !== "") ? parseFloat(rawWaterTemp) : "";
 
       var rawDoseIn = grind.dose_in !== undefined ? grind.dose_in : (grind.doseIn !== undefined ? grind.doseIn : grind.cafe_in);
-      var doseIn = (rawDoseIn !== undefined && rawDoseIn !== null && rawDoseIn !== "") ? parseFloat(rawDoseIn) : values[i][10];
+      var doseIn = (rawDoseIn !== undefined && rawDoseIn !== null && rawDoseIn !== "") ? parseFloat(rawDoseIn) : "";
 
       var rawYieldOut = grind.yield_out !== undefined ? grind.yield_out : (grind.yieldOut !== undefined ? grind.yieldOut : grind.cafe_out);
-      var yieldOut = (rawYieldOut !== undefined && rawYieldOut !== null && rawYieldOut !== "") ? parseFloat(rawYieldOut) : values[i][11];
+      var yieldOut = (rawYieldOut !== undefined && rawYieldOut !== null && rawYieldOut !== "") ? parseFloat(rawYieldOut) : "";
 
-      var grado = grind.grado !== undefined ? grind.grado : (grind.grind_size !== undefined ? grind.grind_size : (grind.grindSetting !== undefined ? grind.grindSetting : values[i][12]));
-      var comentario = sanitizeInput(grind.comentario !== undefined ? grind.comentario : (grind.comment !== undefined ? grind.comment : (grind.comments !== undefined ? grind.comments : values[i][13])));
-      var fecha = grind.fecha ? String(grind.fecha) : String(values[i][14]);
+      var rawExtractionTime = grind.extraction_time !== undefined ? grind.extraction_time : (grind.extractionTime !== undefined ? grind.extractionTime : grind.tiempo_extraccion);
+      var extractionTime = (rawExtractionTime !== undefined && rawExtractionTime !== null && rawExtractionTime !== "") ? parseFloat(rawExtractionTime) : "";
+
+      var grado = grind.grado !== undefined ? grind.grado : (grind.grind_size !== undefined ? grind.grind_size : (grind.grindSetting !== undefined ? grind.grindSetting : 0));
+      var comentario = sanitizeInput(grind.comentario !== undefined ? grind.comentario : (grind.comment !== undefined ? grind.comment : (grind.comments !== undefined ? grind.comments : "")));
+      var fecha = grind.fecha ? String(grind.fecha) : String(values[i][values[i].length - 1] || "");
 
       var updatedRow = [
         String(values[i][0]),
@@ -880,12 +942,14 @@ function handleUpdateGrind(data) {
         roaster,
         metodo,
         variedad,
+        altitud,
         proceso,
         pais,
         flavorProfile,
         waterTemp !== "" && waterTemp !== null && !isNaN(waterTemp) ? parseFloat(waterTemp) : "",
         doseIn !== "" && doseIn !== null && !isNaN(doseIn) ? parseFloat(doseIn) : "",
         yieldOut !== "" && yieldOut !== null && !isNaN(yieldOut) ? parseFloat(yieldOut) : "",
+        extractionTime !== "" && extractionTime !== null && !isNaN(extractionTime) ? parseFloat(extractionTime) : "",
         grado,
         comentario,
         fecha
@@ -904,6 +968,8 @@ function handleUpdateGrind(data) {
         tostadero: roaster,
         metodo: metodo,
         variedad: variedad,
+        altitud: altitud,
+        altitude: altitud,
         proceso: proceso,
         pais: pais,
         flavor_profile: flavorProfile,
@@ -914,6 +980,8 @@ function handleUpdateGrind(data) {
         cafe_in: doseIn !== "" && doseIn !== null && !isNaN(doseIn) ? parseFloat(doseIn) : null,
         yield_out: yieldOut !== "" && yieldOut !== null && !isNaN(yieldOut) ? parseFloat(yieldOut) : null,
         cafe_out: yieldOut !== "" && yieldOut !== null && !isNaN(yieldOut) ? parseFloat(yieldOut) : null,
+        extraction_time: extractionTime !== "" && extractionTime !== null && !isNaN(extractionTime) ? parseFloat(extractionTime) : null,
+        tiempo_extraccion: extractionTime !== "" && extractionTime !== null && !isNaN(extractionTime) ? parseFloat(extractionTime) : null,
         grado: grado,
         comentario: comentario,
         fecha: fecha
@@ -1147,7 +1215,7 @@ function repairSheetHeaders(sheetOrSpreadsheet) {
 
 /**
  * Migra o inicializa automáticamente la pestaña 'moliendas' a la estructura requerida
- * Cabeceras: id | molino | coffee_name | roaster | metodo | variedad | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | grado | comentario | fecha
+ * Cabeceras: id | molino | coffee_name | roaster | metodo | variedad | altitud | proceso | pais | flavor_profile | water_temp | dose_in | yield_out | extraction_time | grado | comentario | fecha
  * Mantiene intactos todos los registros previos de esquemas de 7 columnas o versiones anteriores.
  */
 function ensureMoliendasSchema(sheet) {
@@ -1191,13 +1259,15 @@ function ensureMoliendasSchema(sheet) {
     "coffee_name": ["coffee_name", "nombre_cafe", "cafe", "coffee", "nombre"],
     "roaster": ["roaster", "tostadero", "tostador"],
     "metodo": ["metodo", "method"],
-    "variedad": ["variedad", "variety"],
+    "variedad": ["variedad", "variety", "varietal"],
+    "altitud": ["altitud", "altitude", "altura", "masl", "msnm"],
     "proceso": ["proceso", "process"],
     "pais": ["pais", "country", "origen", "origin"],
     "flavor_profile": ["flavor_profile", "perfil_sabor", "perfil", "notas", "notes"],
     "water_temp": ["water_temp", "temp_agua", "temp", "temperatura", "temperature"],
     "dose_in": ["dose_in", "cafe_in", "in", "dosis_in", "grams_in"],
     "yield_out": ["yield_out", "cafe_out", "out", "rendimiento", "grams_out"],
+    "extraction_time": ["extraction_time", "tiempo_extraccion", "time", "tiempo", "brew_time", "extraction"],
     "grado": ["grado", "grind_size", "clicks", "setting", "molienda"],
     "comentario": ["comentario", "comentarios", "comment", "comments", "notes", "notas_adicionales"],
     "fecha": ["fecha", "date", "created_at"]

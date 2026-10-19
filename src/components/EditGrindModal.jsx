@@ -1,55 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from './Modal';
-import { DialSlider } from './DialSlider';
+import { CylindricalDialSelector } from './CylindricalDialSelector';
 import { useLanguage } from '../context/LanguageContext';
-import { Scale, Thermometer, Tag, MessageSquare, AlertCircle, Sliders } from 'lucide-react';
+import { Scale, Thermometer, Tag, MessageSquare, AlertCircle, Sliders, Mountain, Timer } from 'lucide-react';
 
-const COFFEE_METHODS = [
-  'Espresso',
-  'Mokka',
-  'Filtro',
-  'Aeropress',
-  'Prensa Francesa',
-  'Cold Brew'
-];
 
-const COFFEE_VARIETIES = [
-  'Arábica',
-  'Robusta',
-  'Libérica',
-  'Excelsa'
-];
-
-const COFFEE_PROCESSES = [
-  'Natural',
-  'Lavado',
-  'Honey',
-  'Anaeróbico',
-  'Maceración Carbónica',
-  'Koji'
-];
-
-const POPULAR_COUNTRIES = [
-  'Colombia',
-  'Etiopía',
-  'Kenia',
-  'Guatemala',
-  'Costa Rica',
-  'Brasil',
-  'Panamá',
-  'Perú'
-];
-
-const SUGGESTED_FLAVORS = [
-  'Floral',
-  'Frutal',
-  'Cítrico',
-  'Chocolate',
-  'Caramelo',
-  'Frutos Rojos',
-  'Jazmín',
-  'Miel'
-];
+import {
+  USUAL_VARIETIES,
+  SUGGESTED_VARIETIES_DATALIST,
+  USUAL_PROCESSES,
+  SUGGESTED_PROCESSES_DATALIST,
+  COFFEE_METHODS,
+  POPULAR_COUNTRIES,
+  SUGGESTED_FLAVORS,
+  isOptionSelected
+} from '../constants/coffee';
 
 export const EditGrindModal = ({
   isOpen,
@@ -58,7 +23,7 @@ export const EditGrindModal = ({
   mills = [],
   onSave
 }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [isUpdating, setIsUpdating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -68,13 +33,15 @@ export const EditGrindModal = ({
     nombre_cafe: '',
     tostadero: '',
     metodo: 'Espresso',
-    variedad: 'Arábica',
+    variedad: 'Bourbon',
+    altitud: '',
     proceso: 'Lavado',
     pais: '',
     perfil_sabor: '',
     temp_agua: '',
     cafe_in: '18.0',
     cafe_out: '36.0',
+    extraction_time: '',
     grado: 0,
     comentario: ''
   });
@@ -100,6 +67,11 @@ export const EditGrindModal = ({
       const rawOut = grind.yield_out ?? grind.yieldOut ?? grind.cafe_out;
       const cafeOut = (rawOut !== null && rawOut !== undefined && rawOut !== '') ? String(rawOut) : '36.0';
 
+      const rawExtraction = grind.extraction_time ?? grind.tiempo_extraccion;
+      const extractionTime = (rawExtraction !== null && rawExtraction !== undefined && rawExtraction !== '') ? String(rawExtraction) : '';
+
+      const rawAltitude = grind.altitud || grind.altitude || '';
+
       const rawGrado = grind.grado ?? grind.grind_size ?? grind.grindSetting ?? 0;
       const grado = isNaN(rawGrado) ? 0 : parseFloat(rawGrado);
 
@@ -111,12 +83,14 @@ export const EditGrindModal = ({
         tostadero: roaster,
         metodo: method,
         variedad: variety,
+        altitud: rawAltitude,
         proceso: process,
         pais: country,
         perfil_sabor: flavor,
         temp_agua: waterTemp,
         cafe_in: cafeIn,
         cafe_out: cafeOut,
+        extraction_time: extractionTime,
         grado: grado,
         comentario: comment
       });
@@ -186,7 +160,8 @@ export const EditGrindModal = ({
       const parsedTemp = editForm.temp_agua ? parseFloat(editForm.temp_agua) : null;
       const parsedIn = editForm.metodo === 'Espresso' ? (parseFloat(editForm.cafe_in) || null) : null;
       const parsedOut = editForm.metodo === 'Espresso' ? (parseFloat(editForm.cafe_out) || null) : null;
-      const parsedGrado = parseFloat(editForm.grado) || 0;
+      const parsedExtraction = (editForm.metodo === 'Espresso' && editForm.extraction_time) ? (parseFloat(editForm.extraction_time) || null) : null;
+      const parsedGrado = isDial ? parseFloat(Number(editForm.grado || 0).toFixed(2)) : (parseInt(editForm.grado, 10) || 0);
 
       const payload = {
         id: grind.id,
@@ -196,7 +171,9 @@ export const EditGrindModal = ({
         roaster: cleanRoaster,
         tostadero: cleanRoaster,
         metodo: editForm.metodo,
-        variedad: editForm.variedad,
+        variedad: editForm.variedad.trim(),
+        altitud: editForm.altitud.trim(),
+        altitude: editForm.altitud.trim(),
         proceso: editForm.proceso,
         pais: cleanCountry,
         flavor_profile: cleanFlavor,
@@ -207,6 +184,8 @@ export const EditGrindModal = ({
         cafe_in: parsedIn,
         yield_out: parsedOut,
         cafe_out: parsedOut,
+        extraction_time: parsedExtraction,
+        tiempo_extraccion: parsedExtraction,
         grado: parsedGrado,
         comentario: editForm.comentario.trim(),
         fecha: grind.fecha
@@ -263,45 +242,22 @@ export const EditGrindModal = ({
           </select>
         </div>
 
-        {/* 2. Ajuste de Grado: Dial Slider Mahlkönig o Clicks Slider */}
+        {/* 2. Ajuste de Grado: Unified Cylindrical Dial & Clicks Wheel */}
         <div>
           <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1.5">
             {t('grindSettingLabel')}
           </label>
 
-          {isDial ? (
-            <DialSlider
-              value={editForm.grado}
-              onChange={(newVal) => setEditForm({ ...editForm, grado: newVal })}
-              totalNumbers={dialNumbers}
-              dialSteps={dialSteps}
-              min={0}
-            />
-          ) : (
-            <div className="bg-coffee-100/40 dark:bg-darkbg-input/40 p-4 rounded-3xl border border-coffee-200/70 dark:border-darkbg-border space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-coffee-600 dark:text-coffee-300">
-                  Ajuste de Clicks
-                </span>
-                <span className="text-lg font-black font-mono text-terracotta">
-                  {Number(editForm.grado).toFixed(1)} clicks
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max={maxClicks}
-                step="0.5"
-                value={editForm.grado}
-                onChange={(e) => setEditForm({ ...editForm, grado: parseFloat(e.target.value) })}
-                className="w-full h-2.5 bg-coffee-200 dark:bg-darkbg-border rounded-lg appearance-none cursor-pointer accent-terracotta"
-              />
-              <div className="flex justify-between text-[10px] text-coffee-400 font-mono">
-                <span>0 clicks</span>
-                <span>{maxClicks} clicks</span>
-              </div>
-            </div>
-          )}
+          <CylindricalDialSelector
+            mode={isDial ? 'dial' : 'clicks'}
+            value={editForm.grado}
+            onChange={(newVal) => setEditForm({ ...editForm, grado: newVal })}
+            totalNumbers={dialNumbers}
+            dialSteps={dialSteps}
+            totalClicks={maxClicks}
+            min={isDial ? 0 : 1}
+            unit={isDial ? 'Dial' : 'Clicks'}
+          />
         </div>
 
         {/* 3. Café y Tostadero */}
@@ -334,57 +290,113 @@ export const EditGrindModal = ({
           </div>
         </div>
 
-        {/* 4. Método, Variedad, Proceso */}
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <label className="block text-[11px] font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-              {t('methodLabel')}
-            </label>
-            <select
-              value={editForm.metodo}
-              onChange={(e) => setEditForm({ ...editForm, metodo: e.target.value })}
-              className="w-full px-2 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40"
-            >
-              {COFFEE_METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* 4. Método de Preparación */}
+        <div>
+          <label className="block text-[11px] font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
+            {t('methodLabel')}
+          </label>
+          <select
+            value={editForm.metodo}
+            onChange={(e) => setEditForm({ ...editForm, metodo: e.target.value })}
+            className="w-full px-2.5 py-2.5 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40"
+          >
+            {COFFEE_METHODS.map((m) => (
+              <option key={m.id} value={m.es}>
+                {language === 'en' ? m.en : m.es}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-              {t('varietyLabel')}
-            </label>
-            <select
+        {/* Variedad de Café con Chips de Acceso Rápido (Arábica, Robusta, Libérica, Excelsa) y entrada personalizada */}
+        <div>
+          <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1 flex items-center gap-1">
+            <Coffee className="w-3 h-3 text-terracotta" />
+            <span>{t('varietyLabel')}</span>
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              list="edit-variety-suggestions"
               value={editForm.variedad}
               onChange={(e) => setEditForm({ ...editForm, variedad: e.target.value })}
-              className="w-full px-2 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40"
-            >
-              {COFFEE_VARIETIES.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
+              placeholder={t('varietyPlaceholder')}
+              required
+              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40 focus:outline-none"
+            />
+            <datalist id="edit-variety-suggestions">
+              {SUGGESTED_VARIETIES_DATALIST.map((v) => (
+                <option key={v} value={v} />
               ))}
-            </select>
+            </datalist>
           </div>
 
-          <div>
-            <label className="block text-[11px] font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
-              {t('processLabel')}
-            </label>
-            <select
+          {/* Quick Variety Chips (Arábica, Robusta, Libérica, Excelsa traducidos) */}
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {USUAL_VARIETIES.map((v) => {
+              const label = language === 'en' ? v.en : v.es;
+              const isSelected = isOptionSelected(editForm.variedad, v);
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, variedad: label })}
+                  className={`text-[10px] px-2 py-0.5 rounded-lg transition-all font-medium active:scale-95 ${
+                    isSelected
+                      ? 'bg-terracotta text-white font-bold shadow-xs'
+                      : 'bg-coffee-100/70 hover:bg-coffee-200 dark:bg-darkbg-input text-coffee-600 dark:text-coffee-300'
+                  }`}
+                >
+                  {isSelected ? '✓ ' : '+ '}{label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Proceso de Café con Chips de Acceso Rápido y entrada personalizada */}
+        <div>
+          <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1 flex items-center gap-1">
+            <Tag className="w-3 h-3 text-terracotta" />
+            <span>{t('processLabel')}</span>
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              list="edit-process-suggestions"
               value={editForm.proceso}
               onChange={(e) => setEditForm({ ...editForm, proceso: e.target.value })}
-              className="w-full px-2 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40"
-            >
-              {COFFEE_PROCESSES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
+              placeholder={t('processPlaceholder')}
+              required
+              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-semibold focus:ring-2 focus:ring-terracotta/40 focus:outline-none"
+            />
+            <datalist id="edit-process-suggestions">
+              {SUGGESTED_PROCESSES_DATALIST.map((p) => (
+                <option key={p} value={p} />
               ))}
-            </select>
+            </datalist>
+          </div>
+
+          {/* Quick Process Chips (Natural, Lavado/Washed, Honey, Anaeróbico/Anaerobic, etc. traducidos) */}
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {USUAL_PROCESSES.map((p) => {
+              const label = language === 'en' ? p.en : p.es;
+              const isSelected = isOptionSelected(editForm.proceso, p);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, proceso: label })}
+                  className={`text-[10px] px-2 py-0.5 rounded-lg transition-all font-medium active:scale-95 ${
+                    isSelected
+                      ? 'bg-terracotta text-white font-bold shadow-xs'
+                      : 'bg-coffee-100/70 hover:bg-coffee-200 dark:bg-darkbg-input text-coffee-600 dark:text-coffee-300'
+                  }`}
+                >
+                  {isSelected ? '✓ ' : '+ '}{label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -395,39 +407,62 @@ export const EditGrindModal = ({
               <Scale className="w-3.5 h-3.5 text-orange-600" />
               <span>{t('espressoSectionTitle')}</span>
             </span>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div>
                 <label className="block text-[10px] font-bold text-orange-800 dark:text-orange-300 mb-1">
                   {t('espressoCoffeeInLabel')}
                 </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={editForm.cafe_in}
-                  onChange={(e) => setEditForm({ ...editForm, cafe_in: e.target.value })}
-                  required
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-darkbg-input border border-orange-300 font-mono text-xs font-bold"
-                />
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editForm.cafe_in}
+                    onChange={(e) => setEditForm({ ...editForm, cafe_in: e.target.value })}
+                    required
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-darkbg-input border border-orange-300 font-mono text-xs font-bold"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-coffee-400">g</span>
+                </div>
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-orange-800 dark:text-orange-300 mb-1">
                   {t('espressoCoffeeOutLabel')}
                 </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={editForm.cafe_out}
-                  onChange={(e) => setEditForm({ ...editForm, cafe_out: e.target.value })}
-                  required
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-darkbg-input border border-orange-300 font-mono text-xs font-bold"
-                />
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editForm.cafe_out}
+                    onChange={(e) => setEditForm({ ...editForm, cafe_out: e.target.value })}
+                    required
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-darkbg-input border border-orange-300 font-mono text-xs font-bold"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-coffee-400">g</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-orange-800 dark:text-orange-300 mb-1 flex items-center gap-1">
+                  <Timer className="w-3 h-3 text-orange-600" />
+                  <span>{t('espressoExtractionTimeLabel') || 'Tiempo (s)'}</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="1"
+                    value={editForm.extraction_time}
+                    onChange={(e) => setEditForm({ ...editForm, extraction_time: e.target.value })}
+                    placeholder="28"
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-darkbg-input border border-orange-300 font-mono text-xs font-bold"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-coffee-400">s</span>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 6. País & Temperatura */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* 6. País, Altitud & Temperatura */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div>
             <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1">
               {t('countryLabel')}
@@ -438,13 +473,27 @@ export const EditGrindModal = ({
               value={editForm.pais}
               onChange={(e) => setEditForm({ ...editForm, pais: e.target.value })}
               required
-              className="w-full px-3 py-2.5 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-medium focus:ring-2 focus:ring-terracotta/40"
+              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-medium focus:ring-2 focus:ring-terracotta/40"
             />
             <datalist id="edit-country-list">
               {POPULAR_COUNTRIES.map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-coffee-700 dark:text-coffee-300 uppercase tracking-wider mb-1 flex items-center gap-1">
+              <Mountain className="w-3.5 h-3.5 text-terracotta" />
+              <span>{t('altitudeLabel') || 'Altitud'}</span>
+            </label>
+            <input
+              type="text"
+              value={editForm.altitud}
+              onChange={(e) => setEditForm({ ...editForm, altitud: e.target.value })}
+              placeholder="Ej. 1800m"
+              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-medium focus:ring-2 focus:ring-terracotta/40"
+            />
           </div>
 
           <div>
@@ -457,7 +506,7 @@ export const EditGrindModal = ({
               value={editForm.temp_agua}
               onChange={(e) => setEditForm({ ...editForm, temp_agua: e.target.value })}
               placeholder="Ej. 93"
-              className="w-full px-3 py-2.5 rounded-2xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-sm font-mono font-medium focus:ring-2 focus:ring-terracotta/40"
+              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-darkbg-input border border-coffee-200 dark:border-darkbg-border text-coffee-900 dark:text-coffee-100 text-xs font-mono font-medium focus:ring-2 focus:ring-terracotta/40"
             />
           </div>
         </div>
